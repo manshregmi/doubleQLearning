@@ -2,7 +2,7 @@ from model.doubleQ import DoubleQLearningAgent
 from profile.profile import ProfilingData
 
 
-def run_simulation(episodes=5, max_steps=20):
+def run_simulation(episodes=100000, max_steps=20):
     # Dummy profiling data setup
     layers = [
         [0, 1, 2],     # Layer 0 with 3 nodes
@@ -14,16 +14,16 @@ def run_simulation(episodes=5, max_steps=20):
 
     # Edge computation times (ms)
     node_edge_times = {
-        (0, 0): 30, (0, 1): 35, (0, 2): 32,
-        (1, 0): 40, (1, 1): 45,
-        (2, 0): 35, (2, 1): 33, (2, 2): 38, (2, 3): 40
+        (0, 0): 10, (0, 1): 4, (0, 2): 2,
+        (1, 0): 15, (1, 1): 10,
+        (2, 0): 4, (2, 1): 5, (2, 2): 8, (2, 3): 10
     }
 
     # Cloud computation times (ms)
     node_cloud_times = {
-        (0, 0): 10, (0, 1): 12, (0, 2): 11,
-        (1, 0): 15, (1, 1): 16,
-        (2, 0): 12, (2, 1): 11, (2, 2): 14, (2, 3): 15
+        (0, 0): 5, (0, 1): 2, (0, 2): 1,
+        (1, 0): 5, (1, 1): 6,
+        (2, 0): 2, (2, 1): 1, (2, 2): 4, (2, 3): 5
     }
 
     # Edge power consumption (Watts)
@@ -34,10 +34,11 @@ def run_simulation(episodes=5, max_steps=20):
     }
 
     bandwidth = 15.0         # Mbps
-    rtt = 8.0                # ms
-    output_size = 512        # KB
+    rtt = 0.5                # ms
+    output_size = 1          # KB
     edge_idle_power = 1.2    # Watts
-    deadline = 12           # ms
+    edge_communication_power = 2.0  # Watts
+    deadline = 70            # ms
 
     profiling_data = ProfilingData(
         numberOfEdgeDevice=numberOfEdgeDevice,
@@ -49,30 +50,37 @@ def run_simulation(episodes=5, max_steps=20):
         output_size=output_size,
         node_edge_powers=node_edge_powers,
         edge_idle_power=edge_idle_power,
-        deadline=deadline
+        deadline=deadline,
+        edge_communication_power=edge_communication_power
     )
 
     agent = DoubleQLearningAgent(profiling_data)
 
+    total_reward = 0.0
+    total_edge_energy = 0.0
+    total_completion_time = 0.0
+    total_steps = 0
+
     # Run multiple episodes
     for ep in range(episodes):
         # Reset environment at the start of each episode
-        current_state = [bandwidth, 0, 0, len(layers[0])]
-        print(f"\n===== Episode {ep + 1} =====")
-
+        current_state = (bandwidth, 0, 0, None)  # <-- prev_action = None at start
+        print(f"Episode {ep+1}/{episodes}")
         for step in range(max_steps):
-            action, reward, next_state, terminal = agent.train(current_state)
+            action, reward, next_state, terminal, energy, completionTime = agent.train(current_state)
 
-            print(f"Step {step + 1}:")
-            print(f"  Current State: {current_state}")
-            print(f"  Action (0=edge, 1=cloudlet):\n{action}")
-            print(f"  Reward: {reward:.3f}")
-            print(f"  Next State: {next_state}\n")
+            total_reward += reward
+            total_edge_energy += energy
+            total_completion_time += completionTime
+            total_steps += 1
 
             current_state = next_state
             if terminal:
-                print("  >>> Episode finished (last layer reached)\n")
                 break
+
+    print(f"Average Reward per step: {total_reward/total_steps:.2f}")
+    print(f"Total Edge Energy Consumption: {total_edge_energy:.2f} Joules")
+    print(f"Average Completion Time per step: {((total_completion_time/episodes) * 10**3):.2f} ms")
 
 
 if __name__ == "__main__":

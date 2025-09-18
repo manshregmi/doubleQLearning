@@ -10,7 +10,8 @@ class ProfilingData:
         output_size,
         node_edge_powers,  # Dict {(layer_idx, node_idx): power on edge}
         edge_idle_power,
-        deadline
+        deadline,
+        edge_communication_power,
     ):
         self.numberOfEdgeDevice = numberOfEdgeDevice
         self.layers = layers
@@ -22,6 +23,7 @@ class ProfilingData:
         self.node_edge_powers = node_edge_powers
         self.edge_idle_power = edge_idle_power
         self.deadline = deadline
+        self.edge_communication_power = edge_communication_power
 
     def get_num_nodes(self, layer_idx):
         return len(self.layers[layer_idx])
