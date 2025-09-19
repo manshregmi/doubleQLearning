@@ -14,11 +14,27 @@ class DoubleQLearningAgent:
         self.Q2 = {}
         self.simulator = CloudEdgeSimulator(profiling_data)
 
+        # ---- Discretization bins ----
+        # Bandwidth in Mbps (range 1–100 Mbps, 20 bins)
+        self.bandwidth_bins = np.linspace(1, 100, 5)
+        # Cloud congestion time in ms (range 0–500 ms, 25 bins)
+        self.cloudtime_bins = np.linspace(0, 500, 5)
+
     # ----- Helpers -----
+    def _discretize(self, value, bins):
+        """Map continuous value to nearest bin center."""
+        idx = np.digitize(value, bins) - 1
+        idx = max(0, min(idx, len(bins) - 1))  # clamp
+        return bins[idx]
+
     def _state_to_key(self, state):
         """Discretize continuous values for Q-table stability, include prev_action as tuple."""
         bw, ctime, layer, prev_action = state
-        s_key = (round(float(bw), 1), round(float(ctime), 1), int(layer))
+
+        # Discretize bandwidth (Mbps) and cloud congestion (ms)
+        bw_disc = self._discretize(float(bw), self.bandwidth_bins)
+        ctime_disc = self._discretize(float(ctime), self.cloudtime_bins)
+        s_key = (bw_disc, ctime_disc, int(layer))
 
         if prev_action is not None:
             prev_action_key = self._action_to_key(prev_action)

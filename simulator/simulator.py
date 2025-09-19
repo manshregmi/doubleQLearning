@@ -96,15 +96,29 @@ class CloudEdgeSimulator:
         # --- Cloud energy ---
         cloud_pending_s = cloud_pending_ms / 1000.0
         actual_idle_time_s = 0.0
+        final_transmission_time_s = 0.0
         if np.any(action[:, 1] == 1):  # some tasks on cloud
         
             actual_idle_time_s = max(
                 0.0, cloud_pending_s - edge_total_time_s
             )
             total_energy += self.profiling.edge_idle_power * actual_idle_time_s  # J
+            # At the end of last layer, if cloud was used
+            if layer == len(self.profiling.layers) - 1 and np.any(action[:, 1] == 1):
+                # Convert KB → Mb
+                size_Mb = (self.profiling.output_size * 8) / 1000.0  
+
+                # Transmission time in ms
+                final_transmission_time_s = (size_Mb / max(bandwidth, 1e-6)) * 1000.0  
+
+                # Add communication energy (convert ms → s)
+                total_energy += (
+                    self.profiling.edge_communication_power * (final_transmission_time_s * 1e-3)
+                )
+
 
         # --- Completion time (s) ---
-        completion_time_s = actual_idle_time_s + edge_total_time_s + max(transmission_time_s, default=0.0)  
+        completion_time_s = actual_idle_time_s + edge_total_time_s + max(transmission_time_s, default=0.0) + final_transmission_time_s 
 
         # --- Deadline check ---
         fractional_deadline_s = (
