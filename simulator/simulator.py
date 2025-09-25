@@ -1,8 +1,9 @@
 import numpy as np
 import random
+from profiling.profile import ProfilingData
 
 class CloudEdgeSimulator:
-    def __init__(self, profiling_data):
+    def __init__(self, profiling_data: ProfilingData):
         """
         Simulator for predicting next state given current state and action.
         Args:
@@ -25,7 +26,7 @@ class CloudEdgeSimulator:
                 self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes
             )  # ms
 
-            congestion = random.uniform(0, 5)  # ms
+            congestion = random.uniform(0, 100)  # ms
             cloud_time = (
                 max(0.0, cloud_time - random.uniform(0, 5))
                 + cloud_proc
@@ -38,6 +39,7 @@ class CloudEdgeSimulator:
         # --- Bandwidth update (stochastic change) ---
         bw_change = random.uniform(-5, 5)  # Mbps fluctuation
         new_bandwidth = max(1.0, bandwidth + bw_change)
+        new_bandwidth = min(new_bandwidth, 30.0)  # cap max bandwidth
 
         # --- Advance to next layer ---
         terminal = False
@@ -51,15 +53,16 @@ class CloudEdgeSimulator:
         next_state = (new_bandwidth, cloud_time, next_layer, action.copy())
         return next_state, terminal, cloud_time
 
-    def calculate_reward(self, next_state, action):
+
+    def compute_energy_and_time(self, current_state, current_action, cloud_pending_ms):
         """
-        Reward using next_state:
-        Converts units here:
-          - ms → s for time
-          - KB → bits, Mbps → bits/s for transmission
-          - Energy = Watts × seconds
+        Compute energy consumption and completion time for a given action.
+
+        Returns:
+            total_energy (float): total energy (Joules)
+            completion_time_s (float): completion time (seconds)
         """
-        bandwidth, cloud_pending_ms, layer, prev_action = next_state
+        bandwidth, _, layer, prev_action = current_state
         layer = int(layer)
 
         total_energy = 0.0
@@ -68,59 +71,51 @@ class CloudEdgeSimulator:
         # --- Transmission time calculation ---
         if prev_action is not None:  # not the first layer
             prev_assignments = prev_action[:, 1]
-            curr_assignments = action[:, 1]
-            transmission_time = 0.0
+            curr_assignments = current_action[:, 1]
             for i in range(len(prev_assignments)):
                 for j in range(len(curr_assignments)):
                     if prev_assignments[i] != curr_assignments[j]:
                         # convert KB → bits, Mbps → bits/s
-                        transmission_time += (
+                        transmission_time = (
                             (self.profiling.output_size * 8 * 1024)
-                            / (max(bandwidth, 1e-6) * 1e6)
+                            / (max(bandwidth, 1e-6) * 10**6)
                         )
                         transmission_time_s.append(transmission_time)
 
         if len(transmission_time_s) > 0:
-            transmission_time = max(transmission_time_s)+( self.profiling.rtt / 1000.0)  # RTT ms → s
+            transmission_time = max(transmission_time_s)
             total_energy += self.profiling.edge_communication_power * transmission_time  # J
 
         # --- Edge tasks energy ---
         edge_total_time_s = 0.0
-        for i in range(len(action)):
-            if action[i, 1] == 0:  # edge
+        for i in range(len(current_action)):
+            if current_action[i, 1] == 0:  # edge
                 node_p = self.profiling.get_node_edge_power(layer, i)  # W
                 node_t_s = self.profiling.get_node_edge_time(layer, i) / 1000.0  # ms → s
                 edge_total_time_s += node_t_s
-                total_energy += node_p * node_t_s  # J
+                total_energy += (node_p * node_t_s)  # J
 
         # --- Cloud energy ---
         cloud_pending_s = cloud_pending_ms / 1000.0
         actual_idle_time_s = 0.0
-        final_transmission_time_s = 0.0
-        if np.any(action[:, 1] == 1):  # some tasks on cloud
-        
-            actual_idle_time_s = max(
-                0.0, cloud_pending_s - edge_total_time_s
-            )
+        if np.any(current_action[:, 1] == 1):  # some tasks on cloud
+            actual_idle_time_s = max(0.0, cloud_pending_s - edge_total_time_s)
             total_energy += self.profiling.edge_idle_power * actual_idle_time_s  # J
-            # At the end of last layer, if cloud was used
-            if layer == len(self.profiling.layers) - 1 and np.any(action[:, 1] == 1):
-                # Convert KB → Mb
-                size_Mb = (self.profiling.output_size * 8) / 1000.0  
-
-                # Transmission time in ms
-                final_transmission_time_s = (size_Mb / max(bandwidth, 1e-6)) * 1000.0  
-
-                # Add communication energy (convert ms → s)
-                total_energy += (
-                    self.profiling.edge_communication_power * (final_transmission_time_s * 1e-3)
-                )
-
 
         # --- Completion time (s) ---
-        completion_time_s = actual_idle_time_s + edge_total_time_s + max(transmission_time_s, default=0.0) + final_transmission_time_s 
+        completion_time_s = actual_idle_time_s + edge_total_time_s + max(transmission_time_s, default=0.0)
 
-        # --- Deadline check ---
+        return total_energy, completion_time_s
+
+
+    def calculate_reward(self, layer, total_energy, completion_time_s):
+        """
+        Compute reward from energy and completion time.
+
+        Returns:
+            reward (float)
+        """
+        # fractional deadline scaling
         fractional_deadline_s = (
             self.profiling.deadline / 1000.0  # ms → s
             * self.profiling.get_num_nodes(layer)
@@ -128,19 +123,11 @@ class CloudEdgeSimulator:
         )
 
         if completion_time_s > fractional_deadline_s:
-            reward = -10000
+            # Penalize proportional to delay
+            delay = completion_time_s - fractional_deadline_s
+            reward = -(total_energy + 1000 * delay)
         else:
-            # Calculate max possible edge energy for this layer
-            max_energy = sum(
-                self.profiling.get_node_edge_power(layer, i)
-                * (self.profiling.get_node_edge_time(layer, i) / 1000.0)
-                for i in range(self.profiling.get_num_nodes(layer))
-            )
-            norm_energy = total_energy / max_energy if max_energy > 0 else 1.0
+            reward = -total_energy
 
-            if np.isclose(max_energy, total_energy):
-                reward = -12000
-            else:
-                reward = (1.0 - norm_energy) * 10000
+        return reward
 
-        return reward, total_energy, completion_time_s
