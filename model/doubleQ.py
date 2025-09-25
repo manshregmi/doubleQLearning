@@ -1,11 +1,11 @@
 import numpy as np
 import random
-from profile.profile import ProfilingData
+from profiling.profile import ProfilingData
 from simulator.simulator import CloudEdgeSimulator
 
 
 class DoubleQLearningAgent:
-    def __init__(self, profiling_data: ProfilingData, alpha=0.1, gamma=0.9, epsilon=0.1):
+    def __init__(self, profiling_data: ProfilingData, alpha=0.1, gamma=0.9, epsilon=0.05):
         self.profiling = profiling_data
         self.alpha = alpha
         self.gamma = gamma
@@ -48,6 +48,16 @@ class DoubleQLearningAgent:
     def _get_possible_actions(self, layer_idx):
         """Generate all possible action patterns for given layer."""
         nodes = self.profiling.get_num_nodes(layer_idx)
+
+        # First layer → EDGE only
+        if (layer_idx == 0 or layer_idx == (len(self.profiling.layers) - 1)):
+            a = np.zeros((nodes, 2), dtype=int)
+            a[:, 0] = layer_idx
+            a[:, 1] = 0   # 0 = edge
+            return [a]
+
+
+        # Middle layers → all patterns (edge=0, cloud=1)
         actions = []
         for pattern in range(2 ** nodes):
             a = np.zeros((nodes, 2), dtype=int)
@@ -57,6 +67,7 @@ class DoubleQLearningAgent:
             actions.append(a)
         return actions
 
+
     # ----- Action selection -----
     def choose_action(self, state):
         layer = int(state[2])
@@ -64,25 +75,26 @@ class DoubleQLearningAgent:
         s_key = self._state_to_key(state)
 
         # ε-greedy
-        if random.random() < self.epsilon:
+        if (random.random() < self.epsilon) and layer > 0 and layer < (len(self.profiling.layers) - 1) :
             return random.choice(actions)
 
         q_values = []
         for a in actions:
             key = (s_key, self._action_to_key(a))
             q_values.append(self.Q1.get(key, 0.0) + self.Q2.get(key, 0.0))
+
         return actions[int(np.argmax(q_values))]
+
 
     # ----- Training update -----
     def train(self, current_state):
         # Choose action
         action = self.choose_action(current_state)
-
         # Environment transition
         next_state, terminal, _ = self.simulator.get_next_state(current_state, action)
-        reward, energy, completion_time = self.simulator.calculate_reward(
-            next_state=next_state, action=action
-        )
+        energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= next_state[1])
+        # Reward calculation
+        reward = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time)
 
         # Decide which Q-table to update
         if random.random() < 0.5:
@@ -114,4 +126,4 @@ class DoubleQLearningAgent:
         # Update Q-value
         q_table[key] = old_value + self.alpha * (target - old_value)
 
-        return action, reward, next_state, terminal, energy, completion_time
+        return action, reward, next_state, terminal, energy, completion_time , next_state[0]

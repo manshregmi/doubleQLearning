@@ -1,0 +1,1 @@
+print("Profiling data initialized.")
