@@ -11,30 +11,32 @@ class CloudEdgeSimulator:
         """
         self.profiling = profiling_data
 
-    def get_next_state(self, current_state, action):
+    def get_next_state(self, current_state, action, surplus):
         """
         Compute next state given current state and action.
         State = (bandwidth [Mbps], cloud_time [ms], layer, prev_action_array)
         """
-        bandwidth, cloud_time, layer, _ = current_state
+        bandwidth, cloud_time, layer, previous_action, ___ = current_state
         layer = int(layer)
 
         # --- Cloud processing update ---
         cloud_nodes = np.where(action[:, 1] == 1)[0]
+        previous_cloud_nodes = np.where(previous_action[:, 1] == 1)[0] if previous_action is not None else []
+        # If some tasks were on cloud previously and now new tasks are added to cloud,
         if len(cloud_nodes) > 0:
             cloud_proc = max(
                 self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes
             )  # ms
 
             congestion = random.uniform(0, 100)  # ms
-            cloud_time = (
-                max(0.0, cloud_time - random.uniform(0, 5))
-                + cloud_proc
-                + congestion
-            )
+            cloud_time =  cloud_proc + congestion
+        elif (previous_action is not None) and (len(previous_cloud_nodes) > 0):
+            # SOME OF THE PREVIOUS OPERATIONS IN CLOUD IS ASSUMED TO BE DONE IN THIS FRAME
+            cloud_time -= random.uniform(10, 20)
+
         else:
             # no new tasks → cloud_time decreases
-            cloud_time = max(0.0, cloud_time - random.uniform(0, 5))
+            cloud_time = max(0.0, (cloud_time - random.uniform(0, 10)))
 
         # --- Bandwidth update (stochastic change) ---
         bw_change = random.uniform(-5, 5)  # Mbps fluctuation
@@ -50,7 +52,7 @@ class CloudEdgeSimulator:
             next_layer = layer
 
         # --- Next state carries current action as prev_action ---
-        next_state = (new_bandwidth, cloud_time, next_layer, action.copy())
+        next_state = (new_bandwidth, cloud_time, next_layer, action.copy(), surplus)
         return next_state, terminal, cloud_time
 
 
@@ -62,7 +64,7 @@ class CloudEdgeSimulator:
             total_energy (float): total energy (Joules)
             completion_time_s (float): completion time (seconds)
         """
-        bandwidth, _, layer, prev_action = current_state
+        bandwidth, _, layer, prev_action, _ = current_state
         layer = int(layer)
 
         total_energy = 0.0
@@ -108,7 +110,7 @@ class CloudEdgeSimulator:
         return total_energy, completion_time_s
 
 
-    def calculate_reward(self, layer, total_energy, completion_time_s):
+    def calculate_reward(self, layer, total_energy, completion_time_s, previous_surplus):
         """
         Compute reward from energy and completion time.
 
@@ -117,17 +119,18 @@ class CloudEdgeSimulator:
         """
         # fractional deadline scaling
         fractional_deadline_s = (
-            self.profiling.deadline / 1000.0  # ms → s
-            * self.profiling.get_num_nodes(layer)
-            / max(1, self.profiling.get_total_nodes())
-        )
+            self.profiling.get_edge_time_for_layer(layer)/self.profiling.get_total_edge_time()
+        ) * (self.profiling.deadline / 1000.0)  # ms → s
 
-        if completion_time_s > fractional_deadline_s:
+        constrained_completion_time_s = min(0, completion_time_s - previous_surplus)
+        surplus = constrained_completion_time_s - fractional_deadline_s
+
+        if constrained_completion_time_s > fractional_deadline_s:
             # Penalize proportional to delay
             delay = completion_time_s - fractional_deadline_s
-            reward = -(total_energy + 1000 * delay)
+            reward = -(total_energy + (delay*100))*1000000
         else:
-            reward = -total_energy
+            reward = - total_energy
 
-        return reward
+        return reward , surplus
 

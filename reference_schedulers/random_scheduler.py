@@ -60,11 +60,11 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
         initial_cloud_time = 0.0
         initial_layer = 0
         prev_action = None
-        state = (initial_bandwidth, initial_cloud_time, initial_layer, prev_action)
+        state = (initial_bandwidth, initial_cloud_time, initial_layer, prev_action, 0)
 
         for step in range(max_steps):
             action = get_random_action(profiling_data, state[2]) if is_random else get_all_cloud_action(profiling_data, state[2]) if is_all_cloud else get_all_edge_action(profiling_data, state[2])   
-            next_state, terminal, cloud_time = simulator.get_next_state(state, action)
+            next_state, terminal, cloud_time = simulator.get_next_state(state, action, 0)
             total_energy, completion_time = simulator.compute_energy_and_time(state, action, cloud_time)
 
             energies.append(total_energy)
@@ -79,20 +79,20 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
         episode_completion_times.append(np.sum(times))
 
     # --- Plotting ---
-    plt.figure(figsize=(6,4))
-    plt.plot(np.arange(1, episodes+1, 1), episode_energies, marker='o')
-    plt.xlabel("Episodes")
-    plt.ylabel("Total Edge Energy (Joules)")
-    plt.title(f"{'Random' if is_random else 'All Cloud' if is_all_cloud else 'All Edge'} Scheduler: Energy vs Episodes, {'average energy=' + str(np.mean(episode_energies)) if episodes > 0 else ''}")
-    plt.grid(True)
-    plt.show()
+    # plt.figure(figsize=(6,4))
+    # plt.plot(np.arange(1, episodes+1, 1), episode_energies, marker='o')
+    # plt.xlabel("Episodes")
+    # plt.ylabel("Total Edge Energy (Joules)")
+    # plt.title(f"{'Random' if is_random else 'All Cloud' if is_all_cloud else 'All Edge'} Scheduler: Energy vs Episodes, {'average energy=' + str(np.mean(episode_energies)) if episodes > 0 else ''}")
+    # plt.grid(True)
+    # plt.show()
 
-    plt.figure(figsize=(6,4))
-    plt.plot(np.arange(1, episodes+1, 1), episode_completion_times, marker='s')
-    plt.xlabel("Episodes")
-    plt.ylabel("Avg Completion Time (ms)")
-    plt.title(f"{'Random' if is_random else 'All Cloud' if is_all_cloud else 'All Edge'}: Completion Time vs Episodes, {'average time=' + str(np.mean(episode_completion_times)) if episodes > 0 else ''}")
-    plt.grid(True)
-    plt.show()
+    # plt.figure(figsize=(6,4))
+    # plt.plot(np.arange(1, episodes+1, 1), episode_completion_times, marker='s')
+    # plt.xlabel("Episodes")
+    # plt.ylabel("Avg Completion Time (ms)")
+    # plt.title(f"{'Random' if is_random else 'All Cloud' if is_all_cloud else 'All Edge'}: Completion Time vs Episodes, {'average time=' + str(np.mean(episode_completion_times)) if episodes > 0 else ''}")
+    # plt.grid(True)
+    # plt.show()
 
-    return episode_rewards, episode_energies, episode_completion_times
+    return np.mean(episode_energies), np.mean(episode_completion_times)
