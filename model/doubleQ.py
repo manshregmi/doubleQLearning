@@ -2,10 +2,12 @@ import numpy as np
 import random
 from profiling.profile import ProfilingData
 from simulator.simulator import CloudEdgeSimulator
+import pickle
+import os
 
 
 class DoubleQLearningAgent:
-    def __init__(self, profiling_data: ProfilingData, alpha=0.1, gamma=0.9, epsilon=0.05):
+    def __init__(self, profiling_data: ProfilingData, alpha=0.1, gamma=0.9, epsilon=0.025):
         self.profiling = profiling_data
         self.alpha = alpha
         self.gamma = gamma
@@ -20,6 +22,9 @@ class DoubleQLearningAgent:
         # Cloud congestion time in ms (range 0–500 ms, 25 bins)
         self.cloudtime_bins = np.linspace(0, 500, 5)
 
+        self.surplus_bins = np.linspace(-10, 10, int((10 - (-10)) / 0.1) + 1)
+
+
     # ----- Helpers -----
     def _discretize(self, value, bins):
         """Map continuous value to nearest bin center."""
@@ -28,18 +33,23 @@ class DoubleQLearningAgent:
         return bins[idx]
 
     def _state_to_key(self, state):
-        """Discretize continuous values for Q-table stability, include prev_action as tuple."""
-        bw, ctime, layer, prev_action = state
+        """
+        Discretize continuous values and form a stable Q-table key.
+        State = [bandwidth, congestion_time, layer, prev_action, surplus]
+        """
+        bw, ctime, layer, prev_action, surplus = state
 
-        # Discretize bandwidth (Mbps) and cloud congestion (ms)
+        # Discretize continuous values
         bw_disc = self._discretize(float(bw), self.bandwidth_bins)
         ctime_disc = self._discretize(float(ctime), self.cloudtime_bins)
-        s_key = (bw_disc, ctime_disc, int(layer))
+        surplus_disc = self._discretize(float(surplus), self.surplus_bins)
+
+        base_key = (bw_disc, ctime_disc, int(layer), surplus_disc)
 
         if prev_action is not None:
             prev_action_key = self._action_to_key(prev_action)
-            return s_key + (prev_action_key,)
-        return s_key + (None,)
+            return base_key + (prev_action_key,)
+        return base_key + (None,)
 
     def _action_to_key(self, action):
         """Convert action array into immutable tuple (only assignment col)."""
@@ -91,10 +101,9 @@ class DoubleQLearningAgent:
         # Choose action
         action = self.choose_action(current_state)
         # Environment transition
-        next_state, terminal, _ = self.simulator.get_next_state(current_state, action)
-        energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= next_state[1])
-        # Reward calculation
-        reward = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time)
+        energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= current_state[1])
+        reward, surplus = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time, current_state[4])
+        next_state, terminal, _ = self.simulator.get_next_state(current_state, action, surplus)
 
         # Decide which Q-table to update
         if random.random() < 0.5:
@@ -127,3 +136,20 @@ class DoubleQLearningAgent:
         q_table[key] = old_value + self.alpha * (target - old_value)
 
         return action, reward, next_state, terminal, energy, completion_time , next_state[0]
+    
+    def save_qtables(self, filename="q_tables.pkl"):
+            """Save Q1 and Q2 tables to disk."""
+            with open(filename, "wb") as f:
+                pickle.dump((self.Q1, self.Q2), f)
+            print(f"Q-tables saved to {filename}")
+
+    def load_qtables(self, filename="q_tables.pkl"):
+        """Load Q1 and Q2 tables if file exists, else skip."""
+        if os.path.exists(filename):
+            with open(filename, "rb") as f:
+                self.Q1, self.Q2 = pickle.load(f)
+            print(f"Q-tables found and loaded from {filename}, q1 size: {len(self.Q1)}, q2 size: {len(self.Q2)}")
+            return True
+        else:
+            print(f"Q-table file not found at {filename}. Starting fresh.")
+            return False

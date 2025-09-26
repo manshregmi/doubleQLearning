@@ -40,3 +40,18 @@ class ProfilingData:
     def get_total_nodes(self):
         total_nodes = sum(len(layer) for layer in self.layers)
         return total_nodes
+    
+    def get_total_edge_time(self):
+        """Return total computation time if all nodes run on edge."""
+        total_time = 0.0
+        for layer_idx, layer in enumerate(self.layers):
+            for node_idx in range(len(layer)):
+                total_time += self.get_node_edge_time(layer_idx, node_idx)
+        return total_time
+
+    def get_edge_time_for_layer(self, layer_idx: int):
+        """Return total edge time for all nodes in a given layer."""
+        layer_time = 0.0
+        for node_idx in range(len(self.layers[layer_idx])):
+            layer_time += self.get_node_edge_time(layer_idx, node_idx)
+        return layer_time
