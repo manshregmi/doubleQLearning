@@ -11,12 +11,12 @@ class CloudEdgeSimulator:
         """
         self.profiling = profiling_data
 
-    def get_next_state(self, current_state, action, surplus):
+    def get_next_state(self, current_state, action, surplus, negative_surplus_count):
         """
         Compute next state given current state and action.
         State = (bandwidth [Mbps], cloud_time [ms], layer, prev_action_array)
         """
-        bandwidth, cloud_time, layer, previous_action, ___ = current_state
+        bandwidth, cloud_time, layer, previous_action, _, negative_surplus_count = current_state
         layer = int(layer)
 
         # --- Cloud processing update ---
@@ -52,7 +52,7 @@ class CloudEdgeSimulator:
             next_layer = layer
 
         # --- Next state carries current action as prev_action ---
-        next_state = (new_bandwidth, cloud_time, next_layer, action.copy(), surplus)
+        next_state = (new_bandwidth, cloud_time, next_layer, action.copy(), surplus, negative_surplus_count)
         return next_state, terminal, cloud_time
 
 
@@ -64,7 +64,7 @@ class CloudEdgeSimulator:
             total_energy (float): total energy (Joules)
             completion_time_s (float): completion time (seconds)
         """
-        bandwidth, _, layer, prev_action, _ = current_state
+        bandwidth, _, layer, prev_action, _, negative_surplus_count = current_state
         layer = int(layer)
 
         total_energy = 0.0
@@ -110,7 +110,7 @@ class CloudEdgeSimulator:
         return total_energy, completion_time_s
 
 
-    def calculate_reward(self, layer, total_energy, completion_time_s, previous_surplus):
+    def calculate_reward(self, layer, total_energy, completion_time_s, previous_surplus, negative_surplus_count):
         """
         Compute reward from energy and completion time.
 
@@ -122,15 +122,22 @@ class CloudEdgeSimulator:
             self.profiling.get_edge_time_for_layer(layer)/self.profiling.get_total_edge_time()
         ) * (self.profiling.deadline / 1000.0)  # ms → s
 
-        constrained_completion_time_s = min(0, completion_time_s - previous_surplus)
+        constrained_completion_time_s = completion_time_s + previous_surplus
         surplus = constrained_completion_time_s - fractional_deadline_s
+
+        # If surplus is negative (i.e., finished early), reset to 0
+        if surplus < 0:
+            negative_surplus_count += 1    
 
         if constrained_completion_time_s > fractional_deadline_s:
             # Penalize proportional to delay
-            delay = completion_time_s - fractional_deadline_s
+            delay = constrained_completion_time_s - fractional_deadline_s                
             reward = -(total_energy + (delay*100))*1000000
         else:
-            reward = - total_energy
+            if layer == len(self.profiling.layers) - 1:
+                reward =  total_energy*1000000*negative_surplus_count
+            else:
+                reward = - total_energy
 
-        return reward , surplus
+        return reward , surplus, negative_surplus_count
 

@@ -11,7 +11,7 @@ def run_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=20):
     for ep in range(episodes):
         total_edge_energy = 0.0
         total_completion_time = 0.0
-        current_state = (bandwidth, 0, 0, None, 0)
+        current_state = (bandwidth, 0, 0, None, 0, 0) # (bandwidth, cloud_time, layer, prev_action, surplus, negativesurpluscount)
 
         for __ in range(max_steps):
             _, ___, next_state, terminal, energy, completionTime, new_bandwidth = agent.train(current_state)
