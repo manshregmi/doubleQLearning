@@ -47,7 +47,6 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
     Run random offloading scheduler benchmark over multiple episodes.
     Collect per-episode reward, energy, and completion time.
     """
-    episode_rewards = []
     episode_energies = []
     episode_completion_times = []
 
@@ -60,18 +59,23 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
         initial_cloud_time = 0.0
         initial_layer = 0
         prev_action = None
-        state = (initial_bandwidth, initial_cloud_time, initial_layer, prev_action, 0)
+        state = (initial_bandwidth, initial_cloud_time, initial_layer, prev_action, 0, 0)  # (bandwidth, cloud_time, layer, prev_action, surplus, negative_surplus_count)
 
         for step in range(max_steps):
             action = get_random_action(profiling_data, state[2]) if is_random else get_all_cloud_action(profiling_data, state[2]) if is_all_cloud else get_all_edge_action(profiling_data, state[2])   
-            next_state, terminal, cloud_time = simulator.get_next_state(state, action, 0)
+            next_state, terminal, cloud_time = simulator.get_next_state(state, action, 0, state[5])
             total_energy, completion_time = simulator.compute_energy_and_time(state, action, cloud_time)
+
+        #             energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= current_state[1])
+        # reward, surplus, negative_surplus_count = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time, current_state[4], current_state[5])
+        # next_state, terminal, _ = self.simulator.get_next_state(current_state, action, surplus, negative_surplus_count)
 
             energies.append(total_energy)
             times.append((completion_time * 1000))  # convert to ms
 
             state = next_state
             if terminal:
+                initial_bandwidth = next_state[0]
                 break
 
         # record episode-level results

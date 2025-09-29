@@ -7,7 +7,7 @@ import os
 
 
 class DoubleQLearningAgent:
-    def __init__(self, profiling_data: ProfilingData, alpha=0.1, gamma=0.9, epsilon=0.025):
+    def __init__(self, profiling_data: ProfilingData, alpha=0.25, gamma=0.9, epsilon=0.025):
         self.profiling = profiling_data
         self.alpha = alpha
         self.gamma = gamma
@@ -37,14 +37,14 @@ class DoubleQLearningAgent:
         Discretize continuous values and form a stable Q-table key.
         State = [bandwidth, congestion_time, layer, prev_action, surplus]
         """
-        bw, ctime, layer, prev_action, surplus = state
+        bw, ctime, layer, prev_action, surplus, negative_surplus_count = state
 
         # Discretize continuous values
         bw_disc = self._discretize(float(bw), self.bandwidth_bins)
         ctime_disc = self._discretize(float(ctime), self.cloudtime_bins)
         surplus_disc = self._discretize(float(surplus), self.surplus_bins)
 
-        base_key = (bw_disc, ctime_disc, int(layer), surplus_disc)
+        base_key = (bw_disc, ctime_disc, int(layer), surplus_disc, int(negative_surplus_count))
 
         if prev_action is not None:
             prev_action_key = self._action_to_key(prev_action)
@@ -102,8 +102,8 @@ class DoubleQLearningAgent:
         action = self.choose_action(current_state)
         # Environment transition
         energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= current_state[1])
-        reward, surplus = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time, current_state[4])
-        next_state, terminal, _ = self.simulator.get_next_state(current_state, action, surplus)
+        reward, surplus, negative_surplus_count = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time, current_state[4], current_state[5])
+        next_state, terminal, _ = self.simulator.get_next_state(current_state, action, surplus, negative_surplus_count)
 
         # Decide which Q-table to update
         if random.random() < 0.5:
