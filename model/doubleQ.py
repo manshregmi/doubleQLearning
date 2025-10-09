@@ -10,11 +10,9 @@ class DoubleQLearningAgent:
     def __init__(
         self,
         profiling_data: ProfilingData,
-        alpha: float = 0.1,
+        alpha: float = 0.001,
         gamma: float = 0.85,
-        epsilon: float = 0.2,
-        min_epsilon: float = 0.01,
-        epsilon_decay: float = 0.9995,
+        epsilon: float = 0.125,
     ):
         """
         Double Q-learning agent for layer-by-layer offloading decisions.
@@ -31,9 +29,6 @@ class DoubleQLearningAgent:
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
-        self.min_epsilon = min_epsilon
-        self.epsilon_decay = epsilon_decay
-
         # Q-tables
         self.Q1 = {}
         self.Q2 = {}
@@ -47,7 +42,7 @@ class DoubleQLearningAgent:
         # cloud pending time (ms)
         self.cloudtime_bins = np.linspace(0, 500, 6)
         # surplus bins (coarser; avoid extremely fine fragmentation)
-        self.surplus_bins = np.linspace(-10, 10, 41)  # step 0.5
+        self.surplus_bins = np.linspace(-5, 5, 21)  # step 0.5 s
 
     # ---------------------------
     # Utility & discretization
@@ -153,7 +148,7 @@ class DoubleQLearningAgent:
     # ---------------------------
     # Training (single step)
     # ---------------------------
-    def train(self, current_state, decay_epsilon: bool = True):
+    def train(self, current_state):
         """
         Perform one step of interaction: choose action, query simulator (energy/time), get reward & next state,
         then update either Q1 or Q2 according to Double Q-learning rules.
@@ -173,9 +168,10 @@ class DoubleQLearningAgent:
         )
 
         # Reward computation (simulator returns scaled reward)
-        reward, surplus, negative_surplus_count = self.simulator.calculate_reward(
+        reward, surplus, negative_surplus_count, fractional_deadline = self.simulator.calculate_reward(
             int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5]
         )
+        surplus /= 1000.0  # convert to seconds
 
         # Next state from simulator
         next_state, terminal, _ = self.simulator.get_next_state(
@@ -220,19 +216,15 @@ class DoubleQLearningAgent:
         old_value = q_table.get(cur_key, 0.0)
         q_table[cur_key] = old_value + self.alpha * (target - old_value)
 
-        # Optional epsilon decay (call after update)
-        if decay_epsilon:
-            self.decay_epsilon()
-
-        return action, reward, next_state, terminal, energy, completion_time_s, next_state[0]
+        return action, reward, next_state, terminal, energy, completion_time_s, next_state[0], surplus , fractional_deadline
 
     # ---------------------------
     # Epsilon utils & persistence
     # ---------------------------
-    def decay_epsilon(self):
-        """Decay epsilon multiplicatively but keep above min_epsilon."""
-        self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
-        return self.epsilon
+    # def decay_epsilon(self):
+    #     """Decay epsilon multiplicatively but keep above min_epsilon."""
+    #     self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
+    #     return self.epsilon
 
     def save_qtables(self, filename="q_tables.pkl"):
         """Save Q1 and Q2 tables to disk."""

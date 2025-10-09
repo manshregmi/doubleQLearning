@@ -1,32 +1,37 @@
 from profiling.initialize_profiling import get_profiling_data
 import matplotlib.pyplot as plt
 from reference_schedulers.random_scheduler import run_random_scheduler
-from simulator.a2c_simulator import run__a2c_simulation
+from simulator.a2c_simulator import run_a2c_simulation
 from simulator.doubleQ_simulator import run_simulation
-
+from simulator.sac_simulator import run_sac_simulation
 
 if __name__ == "__main__":
-    episodes = 1000  
-    max_steps = 20
-    deadlines = list(range(15, 501, 5))  # 15ms to 500ms
+    episodes = 500
+    max_steps = 5
+    deadlines = list(range(150, 801, 50))  # 150ms to 800ms
 
     dq_energy, dq_time = [], []
     a2c_energy, a2c_time = [], []
+    sac_energy, sac_time = [], []
     random_energy, random_time = [], []
     edge_energy, edge_time = [], []
     cloud_energy, cloud_time = [], []
 
     for d in deadlines:
-        print(f"Running simulations for deadline: {d} ms")
+        print("Running simulations for deadline: {} ms".format(d))
         profiling_data = get_profiling_data(d)
 
         e, t = run_simulation(profiling_data, episodes, max_steps)
         dq_energy.append(e)
         dq_time.append(t)
 
-        a2c_e, a2c_t = run__a2c_simulation(profiling_data, episodes, max_steps)
+        a2c_e, a2c_t = run_a2c_simulation(profiling_data, episodes, max_steps)
         a2c_energy.append(a2c_e)
         a2c_time.append(a2c_t)
+
+        sac_e, sac_t = run_sac_simulation(profiling_data, episodes, max_steps)
+        sac_energy.append(sac_e)
+        sac_time.append(sac_t)
 
         re, rt = run_random_scheduler(profiling_data, episodes, max_steps, is_random=True, is_all_cloud=False)
         random_energy.append(re)
@@ -44,6 +49,7 @@ if __name__ == "__main__":
     plt.figure(figsize=(8, 6))
     plt.plot(deadlines, dq_energy, label="Double Q", marker='o')
     plt.plot(deadlines, a2c_energy, label="A2C", marker='*')
+    plt.plot(deadlines, sac_energy, label="SAC", marker='s')
     plt.plot(deadlines, random_energy, label="Random", marker='+')
     plt.plot(deadlines, edge_energy, label="All Edge", marker='x')
     plt.plot(deadlines, cloud_energy, label="All Cloud", marker='^')
@@ -59,6 +65,7 @@ if __name__ == "__main__":
     plt.figure(figsize=(8, 6))
     plt.plot(deadlines, dq_time, label="Double Q", marker='o')
     plt.plot(deadlines, a2c_time, label="A2C", marker='*')
+    plt.plot(deadlines, sac_time, label="SAC", marker='s')
     plt.plot(deadlines, random_time, label="Random", marker='+')
     plt.plot(deadlines, edge_time, label="All Edge", marker='x')
     plt.plot(deadlines, cloud_time, label="All Cloud", marker='^')

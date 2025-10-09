@@ -5,7 +5,7 @@ def get_profiling_data(deadline):
     layers = [
         [0], [0, 1, 2], [0, 1], [0, 1, 2, 3], [0],
     ]
-    numberOfEdgeDevice = 2
+    numberOfEdgeDevice = 5
 
     node_edge_times = {
         (0, 0): 1,
