@@ -63,7 +63,7 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
 
         for step in range(max_steps):
             action = get_random_action(profiling_data, state[2]) if is_random else get_all_cloud_action(profiling_data, state[2]) if is_all_cloud else get_all_edge_action(profiling_data, state[2])   
-            next_state, terminal, cloud_time = simulator.get_next_state(state, action, 0, state[5])
+            next_state, terminal, cloud_time = simulator.get_next_state(state, action, 0, state[5], isAllCloud=True if is_all_cloud else False)
             total_energy, completion_time = simulator.compute_energy_and_time(state, action, cloud_time)
 
         # energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= current_state[1])

@@ -14,19 +14,23 @@ def run_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=20):
         total_edge_energy = 0.0
         total_completion_time = 0.0
         total_reward = 0.0
+        episode_surplus = 0.0
+        fractional_deadline = 0.0
         current_state = (bandwidth, cloud_time, 0, None, 0, 0) # (bandwidth, cloud_time, layer, prev_action, surplus, negativesurpluscount)
 
         for __ in range(max_steps):
-            _, reward, next_state, terminal, energy, completionTime, new_bandwidth = agent.train(current_state)
+            _, reward, next_state, terminal, energy, completionTime, new_bandwidth, surplus, fractional_deadline = agent.train(current_state)
             total_edge_energy += energy
             total_completion_time += (completionTime * 1000)  # ms
-            total_reward += reward  
+            total_reward += reward
+            episode_surplus += surplus
+            fractional_deadline += fractional_deadline
             current_state = next_state
             if terminal:
                 bandwidth = new_bandwidth
                 cloud_time = next_state[1]
                 break
-        print(f"[Ep {ep}] Reward={total_reward:.3f}, Energy={total_edge_energy:.3f}, Time={total_completion_time:.3f}")
+        print(f"[Ep {ep}] Reward={total_reward:.3f}, Energy={total_edge_energy:.3f}, Time={total_completion_time:.3f}, Surplus={episode_surplus:.3f}, deadline_frac={fractional_deadline:.3f}")
         rewards.append(total_reward)
 
         edge_energy.append(total_edge_energy)

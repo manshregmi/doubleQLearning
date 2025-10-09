@@ -74,3 +74,5 @@ class ProfilingData:
             total_time += self.get_node_edge_time(layer_idx, node_idx)
         return total_time
 
+    def get_max_nodes(self):
+        return max(len(layer) for layer in self.layers)

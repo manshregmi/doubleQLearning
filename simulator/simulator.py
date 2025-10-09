@@ -11,15 +11,32 @@ class CloudEdgeSimulator:
         """
         self.profiling = profiling_data
 
-    def get_next_state(self, current_state, action, surplus, negative_surplus_count):
+    def get_possible_actions(self, layer):
+        """Generates all possible discrete action matrices for a layer (A2C/Discrete SAC logic)."""
+        if layer >= len(self.profiling.layers):
+            return []
+        nodes = self.profiling.get_num_nodes(layer)
+        actions = []
+        for pattern in range(2 ** nodes):
+            a = np.zeros((nodes, 2), dtype=int)
+            a[:, 0] = layer
+            for i in range(nodes):
+                a[i, 1] = (pattern >> i) & 1
+            actions.append(a)
+        return actions        
+
+    def get_next_state(self, current_state, action, surplus, negative_surplus_count, isAllCloud= False):
         bandwidth, cloud_time_pending_ms, layer, previous_action, _, negative_surplus_count = current_state
         layer = int(layer)
 
         # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(action[:, 1] == 1)[0]
-        congestion = random.uniform(0, 100)  # stochastic congestion ms
+        congestion = random.uniform(50, 100)  # stochastic congestion ms
         new_cloud_pending = 0.0
         new_cloud_pending += congestion
+
+        if isAllCloud:
+            new_cloud_pending*=self.profiling.numberOfEdgeDevice*0.25
 
 
         # If some tasks are assigned to cloud this layer, compute new cloud processing added
@@ -112,59 +129,60 @@ class CloudEdgeSimulator:
         Reward = High when energy is low and the overall computation 
         remains within the global deadline (via fractional deadlines).
 
-        Uses 'surplus' to propagate time savings or overruns across layers.
+        Uses 'surplus' (ms) to propagate time savings or overruns across layers.
         """
 
-        # --- 1. Compute fractional deadline for this layer ---
-        fractional_deadline_s = (
+        # --- 1. Compute fractional deadline for this layer (in ms) ---
+        fractional_deadline_ms = (
             self.profiling.get_edge_time_for_layer(layer)
             / self.profiling.get_total_edge_time()
-        ) * (self.profiling.deadline / 1000.0)
+        ) * self.profiling.deadline
 
-        # --- 2. Compute surplus (carry-over time budget) ---
-        # Positive surplus => finished early (time saved)
-        # Negative surplus => exceeded time (deadline pressure)
-        layer_surplus = fractional_deadline_s + previous_surplus - completion_time_s
+        # --- 2. Convert completion time to ms ---
+        completion_time_ms = completion_time_s * 1000.0
 
-        # --- 3. Define a dynamic λ (penalty balancing factor) ---
-        # Higher power or time makes delay more critical.
-        lambda_param = 5.0
+        # --- 3. Compute surplus in ms ---
+        # Positive surplus => finished early
+        # Negative surplus => exceeded local deadline
+        layer_surplus_ms = fractional_deadline_ms + previous_surplus - completion_time_ms
 
-        # --- 4. Compute penalties ---
-        # Energy is always minimized
-        energy_penalty = total_energy
+        # --- 4. λ (trade-off between energy and delay) ---
+        if not isA2C:
+            lambda_param = 5.0
+        else:
+            lambda_param = 1.0
+        # --- 5. Penalties ---
+        if layer_surplus_ms < 0:
+            delay_penalty = abs(layer_surplus_ms) * lambda_param
+        else:
+            delay_penalty = 0.0
 
-        # Delay penalty only applies if we are late
-        delay_penalty = 0.0
-        if layer_surplus < 0:
-            delay_penalty = abs(layer_surplus) * lambda_param
-            negative_surplus_count += 1
+        # --- 6. Combine penalties smoothly ---
+        # Normalize surplus to seconds scale for sigmoid stability
+        norm_surplus = layer_surplus_ms / 100.0  # scaling prevents overflow
+        sigmoid_weight = 1 / (1 + np.exp(-norm_surplus))
 
-        # --- 5. Combine penalties ---
-        total_penalty = energy_penalty + delay_penalty
+        energy_weight = lambda_param * sigmoid_weight
+        delay_weight = lambda_param * (1 - sigmoid_weight)
+        total_penalty = energy_weight * (total_energy * 100) + delay_weight * delay_penalty
 
-        # --- 6. Compute reward ---
-        # Negative because we want to minimize both
+        # --- 7. Reward computation ---
         reward = -total_penalty
 
-        # --- 7. Add bonuses/penalties based on surplus ---
-        if layer_surplus > 0:
-            # Finished early — small positive incentive
-            reward += 5.0  * layer_surplus
-        else:
-            # Late — small additional penalty for missing local deadline
-            reward -= 5.0 * abs(layer_surplus)
-
-        # --- 8. If this is the final layer ---
-        # Add a global deadline check
-        if layer == len(self.profiling.layers) - 1:
-            if layer_surplus >= 0:
-                # All layers collectively finished within deadline
-                reward += 10.0
+        # --- 8. Local bonuses/penalties ---
+        if layer_surplus_ms > 0:
+            if (not isA2C):
+                reward += 5
             else:
-                # Missed global deadline → penalty grows with delay count
-                reward -= 5.0 * negative_surplus_count
+                reward += 0.5
+        else:
+            if (not isA2C):
+                reward -= 15 * (abs(layer_surplus_ms) / fractional_deadline_ms)
+            else:
+                reward -= 0.75
 
-        return reward, layer_surplus, negative_surplus_count
+        # --- 9. Return ---
+        return reward, layer_surplus_ms, negative_surplus_count, fractional_deadline_ms
+
 
 

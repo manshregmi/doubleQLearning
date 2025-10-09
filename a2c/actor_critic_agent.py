@@ -18,13 +18,37 @@ class A2CAgent:
         self.filename_policy = "policy_table.npy"
 
     # ---------- STATE / ACTION HANDLING ----------
+    def action_to_key_part(self, action_matrix):
+        """Converts the action matrix (N x 2) into a unique, immutable tuple for the state key."""
+        if action_matrix is None:
+            # Handle initial state case where no previous action exists
+            return tuple([-1, -1]) 
+        # Flatten the (N x 2) matrix into a 2*N tuple of integers
+        return tuple(action_matrix.flatten().tolist())
+
     def state_to_key(self, state):
-        bw, ct, layer, _, surplus, negative_surplus_count = state
-        return (round(bw, 1), round(ct, -1), int(layer), round(surplus, 1), int(negative_surplus_count))
+        """
+        Creates a unique, hashable key for the tabular lookup,
+        now including the previous action.
+        State format: (bw, ct, layer, prev_action, surplus, negative_surplus_count)
+        """
+        bw, ct, layer, prev_action, surplus, negative_surplus_count = state
+        
+        # 1. Discretize the continuous variables
+        bw_disc = round(bw, 1)
+        ct_disc = round(ct, -1) # Aggressive rounding to nearest 10
+        surplus_disc = round(surplus, 1)
+        
+        # 2. Get the unique key part for the previous action
+        prev_action_key = self.action_to_key_part(prev_action)
+        
+        # 3. Combine all 6 elements into the final key
+        return (bw_disc, ct_disc, int(layer), prev_action_key, surplus_disc, int(negative_surplus_count))
 
     def get_possible_actions(self, layer):
         nodes = self.profiling.get_num_nodes(layer)
         actions = []
+        # Creates action matrix for every possible pattern (0 to 2^nodes - 1)
         for pattern in range(2 ** nodes):
             a = np.zeros((nodes, 2), dtype=int)
             a[:, 0] = layer
@@ -57,22 +81,28 @@ class A2CAgent:
 
         # simulate
         total_energy, completion_time_s = self.simulator.compute_energy_and_time(current_state, action, current_state[1])
-        reward, new_surplus, negative_surplus_count = self.simulator.calculate_reward(layer, total_energy, completion_time_s, surplus, current_state[5], isA2C=True)
-        next_state, terminal, _ = self.simulator.get_next_state(current_state, action, new_surplus, negative_surplus_count)
+        reward, layer_surplus_ms, negative_surplus_count, fractional_deadline_ms = self.simulator.calculate_reward(layer, total_energy, completion_time_s, surplus, current_state[5], isA2C=True)
+        # Note: action taken now becomes 'prev_action' in the next state
+        next_state, terminal, _ = self.simulator.get_next_state(current_state, action, layer_surplus_ms/1000, negative_surplus_count)
 
         # critic update
         next_key = self.state_to_key(next_state)
         v_s = self.value_table.get(state_key, 0.0)
         v_next = self.value_table.get(next_key, 0.0)
+        # TD Error (delta)
         delta = reward + (0 if terminal else self.gamma * v_next) - v_s
         self.value_table[state_key] = v_s + self.alpha_v * delta
 
         # actor update
         actions = self.get_possible_actions(layer)
         if state_key not in self.policy_table:
+            # Initialize with uniform probability
             self.policy_table[state_key] = np.ones(len(actions)) / len(actions)
 
+        # Find index of the action taken
         action_idx = next(i for i, a in enumerate(actions) if np.array_equal(a, action))
+        
+        # Policy Update (Policy Gradient approximation - note: still unconventional update)
         probs = self.policy_table[state_key]
         probs[action_idx] += self.alpha_p * delta
         probs = np.maximum(probs, 1e-6)
@@ -88,7 +118,7 @@ class A2CAgent:
     # ---------- SAVE / LOAD ----------
     def save_tables(self):
         try: 
-
+            # Use 'allow_pickle=True' for saving dictionary keys/values
             np.save(self.filename_value, self.value_table, allow_pickle=True)
             np.save(self.filename_policy, self.policy_table, allow_pickle=True)
             print("Tables saved successfully.")
@@ -99,6 +129,7 @@ class A2CAgent:
     def load_tables(self):  
         try:
             if os.path.exists(self.filename_value) and os.path.exists(self.filename_policy):
+                # Use '.item()' to convert the 0-D array back into a dictionary
                 self.value_table = np.load(self.filename_value, allow_pickle=True).item()
                 self.policy_table = np.load(self.filename_policy, allow_pickle=True).item()
                 print("Loaded existing A2C tables.")
