@@ -57,7 +57,7 @@ class A2CAgent:
 
         # simulate
         total_energy, completion_time_s = self.simulator.compute_energy_and_time(current_state, action, current_state[1])
-        reward, new_surplus, negative_surplus_count = self.simulator.calculate_reward(layer, total_energy, completion_time_s, surplus, current_state[5])
+        reward, new_surplus, negative_surplus_count = self.simulator.calculate_reward(layer, total_energy, completion_time_s, surplus, current_state[5], isA2C=True)
         next_state, terminal, _ = self.simulator.get_next_state(current_state, action, new_surplus, negative_surplus_count)
 
         # critic update
@@ -79,18 +79,30 @@ class A2CAgent:
         probs /= np.sum(probs)
         self.policy_table[state_key] = probs
 
+        entropy = -np.sum(probs * np.log(probs + 1e-8))
+        print(f"[A2C] δ={delta:.4f}, Reward={reward:.4f}, Entropy={entropy:.4f}")
+
+
         return action, reward, next_state, terminal, total_energy, completion_time_s
 
     # ---------- SAVE / LOAD ----------
     def save_tables(self):
-        np.save(self.filename_value, self.value_table, allow_pickle=True)
-        np.save(self.filename_policy, self.policy_table, allow_pickle=True)
-        print("Tables saved successfully.")
+        try: 
 
-    def load_tables(self):
-        if os.path.exists(self.filename_value) and os.path.exists(self.filename_policy):
-            self.value_table = np.load(self.filename_value, allow_pickle=True).item()
-            self.policy_table = np.load(self.filename_policy, allow_pickle=True).item()
-            print("Loaded existing A2C tables.")
-        else:
-            print("No A2C tables found. Starting fresh.")
+            np.save(self.filename_value, self.value_table, allow_pickle=True)
+            np.save(self.filename_policy, self.policy_table, allow_pickle=True)
+            print("Tables saved successfully.")
+
+        except Exception as e:  
+            print(f"Error saving tables: {e}")
+
+    def load_tables(self):  
+        try:
+            if os.path.exists(self.filename_value) and os.path.exists(self.filename_policy):
+                self.value_table = np.load(self.filename_value, allow_pickle=True).item()
+                self.policy_table = np.load(self.filename_policy, allow_pickle=True).item()
+                print("Loaded existing A2C tables.")
+            else:
+                print("No A2C tables found. Starting fresh.")
+        except Exception as e:
+            print(f"Error loading A2C tables: {e}. Starting fresh.")

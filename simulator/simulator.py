@@ -12,38 +12,28 @@ class CloudEdgeSimulator:
         self.profiling = profiling_data
 
     def get_next_state(self, current_state, action, surplus, negative_surplus_count):
-        """
-        Compute next state given current state and action.
-        State = (bandwidth [Mbps], cloud_time [ms], layer, prev_action_array)
-        """
-        bandwidth, cloud_time, layer, previous_action, _, negative_surplus_count = current_state
+        bandwidth, cloud_time_pending_ms, layer, previous_action, _, negative_surplus_count = current_state
         layer = int(layer)
 
-        # --- Cloud processing update ---
+        # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(action[:, 1] == 1)[0]
-        previous_cloud_nodes = np.where(previous_action[:, 1] == 1)[0] if previous_action is not None else []
-        # If some tasks were on cloud previously and now new tasks are added to cloud,
+        congestion = random.uniform(0, 100)  # stochastic congestion ms
+        new_cloud_pending = 0.0
+        new_cloud_pending += congestion
+
+
+        # If some tasks are assigned to cloud this layer, compute new cloud processing added
         if len(cloud_nodes) > 0:
-            cloud_proc = max(
-                self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes
-            )  # ms
+            # cloud_proc is the maximum cloud processing time among tasks assigned this layer
+            cloud_proc_ms = max(self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes)
+            # New pending = previous pending (what remains) + new cloud work + congestion
+            new_cloud_pending += max(0.0,  cloud_proc_ms)
 
-            congestion = random.uniform(0, 100)  # ms
-            cloud_time =  cloud_proc + congestion
-        elif (previous_action is not None) and (len(previous_cloud_nodes) > 0):
-            # SOME OF THE PREVIOUS OPERATIONS IN CLOUD IS ASSUMED TO BE DONE IN THIS FRAME
-            cloud_time -= random.uniform(10, 20)
-
-        else:
-            # no new tasks → cloud_time decreases
-            cloud_time = max(0.0, (cloud_time - random.uniform(0, 10)))
-
-        # --- Bandwidth update (stochastic change) ---
+        # Bandwidth update (stochastic)
         bw_change = random.uniform(-5, 5)  # Mbps fluctuation
-        new_bandwidth = max(1.0, bandwidth + bw_change)
-        new_bandwidth = min(new_bandwidth, 30.0)  # cap max bandwidth
+        new_bandwidth = max(1.0, min(bandwidth + bw_change, 30.0))
 
-        # --- Advance to next layer ---
+        # Next layer / terminal flag
         terminal = False
         if layer + 1 < len(self.profiling.layers):
             next_layer = layer + 1
@@ -51,42 +41,38 @@ class CloudEdgeSimulator:
             terminal = True
             next_layer = layer
 
-        # --- Next state carries current action as prev_action ---
-        next_state = (new_bandwidth, cloud_time, next_layer, action.copy(), surplus, negative_surplus_count)
-        return next_state, terminal, cloud_time
-
+        next_state = (new_bandwidth, new_cloud_pending, next_layer, action.copy(), surplus, negative_surplus_count)
+        return next_state, terminal, new_cloud_pending
 
     def compute_energy_and_time(self, current_state, current_action, cloud_pending_ms):
-        """
-        Compute energy consumption and completion time for a given action.
-
-        Returns:
-            total_energy (float): total energy (Joules)
-            completion_time_s (float): completion time (seconds)
-        """
         bandwidth, _, layer, prev_action, _, negative_surplus_count = current_state
         layer = int(layer)
 
         total_energy = 0.0
-        transmission_time_s = []
+        transmission_times = []
 
         # --- Transmission time calculation ---
-        if prev_action is not None:  # not the first layer
-            prev_assignments = prev_action[:, 1]
-            curr_assignments = current_action[:, 1]
-            for i in range(len(prev_assignments)):
-                for j in range(len(curr_assignments)):
-                    if prev_assignments[i] != curr_assignments[j]:
-                        # convert KB → bits, Mbps → bits/s
+        # For each node, if its assignment changed from previous layer -> transmission needed.
+        if prev_action is not None:
+            prev_assignments = np.asarray(prev_action[:, 1], dtype=int)
+            curr_assignments = np.asarray(current_action[:, 1], dtype=int)
+
+            # Different node counts: compare via cross-layer transfers
+            # Transmission only occurs between layers when assignments differ
+            # (Edge → Cloud or Cloud → Edge)
+            for prev_node in prev_assignments:
+                for curr_node in curr_assignments:
+                    if prev_node != curr_node:
                         transmission_time = (
                             (self.profiling.output_size * 8 * 1024)
-                            / (max(bandwidth, 1e-6) * 10**6)
+                            / (max(bandwidth, 1e-6) * 1e6)
                         )
-                        transmission_time_s.append(transmission_time)
+                        transmission_times.append(transmission_time)
 
-        if len(transmission_time_s) > 0:
-            transmission_time = max(transmission_time_s)
-            total_energy += self.profiling.edge_communication_power * transmission_time  # J
+        # If any transmissions, the bottleneck is the longest one (assuming pipelined/parallel transfers)
+        max_transmission_time = max(transmission_times) if transmission_times else 0.0
+        if max_transmission_time > 0:
+            total_energy += self.profiling.edge_communication_power * max_transmission_time
 
         # --- Edge tasks energy ---
         edge_total_time_s = 0.0
@@ -97,47 +83,88 @@ class CloudEdgeSimulator:
                 edge_total_time_s += node_t_s
                 total_energy += (node_p * node_t_s)  # J
 
-        # --- Cloud energy ---
+        # --- Cloud idle/busy energy ---
         cloud_pending_s = cloud_pending_ms / 1000.0
         actual_idle_time_s = 0.0
         if np.any(current_action[:, 1] == 1):  # some tasks on cloud
+            # If cloud has pending work, edge processing time may be overlapped with cloud pending time.
             actual_idle_time_s = max(0.0, cloud_pending_s - edge_total_time_s)
             total_energy += self.profiling.edge_idle_power * actual_idle_time_s  # J
 
         # --- Completion time (s) ---
-        completion_time_s = actual_idle_time_s + edge_total_time_s + max(transmission_time_s, default=0.0)
+        # total time is edge processing + any necessary transmission + any waiting for cloud results
+        completion_time_s = edge_total_time_s + max_transmission_time + actual_idle_time_s
 
         return total_energy, completion_time_s
 
 
-    def calculate_reward(self, layer, total_energy, completion_time_s, previous_surplus, negative_surplus_count):
-        """
-        Compute reward from energy and completion time.
 
-        Returns:
-            reward (float)
+    def calculate_reward(
+        self,
+        layer,
+        total_energy,
+        completion_time_s,
+        previous_surplus,
+        negative_surplus_count,
+        isA2C=False,
+    ):
         """
-        # fractional deadline scaling
+        Reward = High when energy is low and the overall computation 
+        remains within the global deadline (via fractional deadlines).
+
+        Uses 'surplus' to propagate time savings or overruns across layers.
+        """
+
+        # --- 1. Compute fractional deadline for this layer ---
         fractional_deadline_s = (
-            self.profiling.get_edge_time_for_layer(layer)/self.profiling.get_total_edge_time()
-        ) * (self.profiling.deadline / 1000.0)  # ms → s
+            self.profiling.get_edge_time_for_layer(layer)
+            / self.profiling.get_total_edge_time()
+        ) * (self.profiling.deadline / 1000.0)
 
-        constrained_completion_time_s = completion_time_s + previous_surplus
-        surplus = constrained_completion_time_s - fractional_deadline_s
+        # --- 2. Compute surplus (carry-over time budget) ---
+        # Positive surplus => finished early (time saved)
+        # Negative surplus => exceeded time (deadline pressure)
+        layer_surplus = fractional_deadline_s + previous_surplus - completion_time_s
 
-        # If surplus is negative (i.e., finished early), reset to 0
-        if surplus < 0:
-            negative_surplus_count += 1    
+        # --- 3. Define a dynamic λ (penalty balancing factor) ---
+        # Higher power or time makes delay more critical.
+        lambda_param = 5.0
 
-        if constrained_completion_time_s > fractional_deadline_s:
-            # Penalize proportional to delay
-            delay = constrained_completion_time_s - fractional_deadline_s                
-            reward = -(total_energy + (delay*100))*1000000
+        # --- 4. Compute penalties ---
+        # Energy is always minimized
+        energy_penalty = total_energy
+
+        # Delay penalty only applies if we are late
+        delay_penalty = 0.0
+        if layer_surplus < 0:
+            delay_penalty = abs(layer_surplus) * lambda_param
+            negative_surplus_count += 1
+
+        # --- 5. Combine penalties ---
+        total_penalty = energy_penalty + delay_penalty
+
+        # --- 6. Compute reward ---
+        # Negative because we want to minimize both
+        reward = -total_penalty
+
+        # --- 7. Add bonuses/penalties based on surplus ---
+        if layer_surplus > 0:
+            # Finished early — small positive incentive
+            reward += 5.0  * layer_surplus
         else:
-            if layer == len(self.profiling.layers) - 1:
-                reward =  total_energy*1000000*negative_surplus_count
-            else:
-                reward = - total_energy
+            # Late — small additional penalty for missing local deadline
+            reward -= 5.0 * abs(layer_surplus)
 
-        return reward , surplus, negative_surplus_count
+        # --- 8. If this is the final layer ---
+        # Add a global deadline check
+        if layer == len(self.profiling.layers) - 1:
+            if layer_surplus >= 0:
+                # All layers collectively finished within deadline
+                reward += 10.0
+            else:
+                # Missed global deadline → penalty grows with delay count
+                reward -= 5.0 * negative_surplus_count
+
+        return reward, layer_surplus, negative_surplus_count
+
 

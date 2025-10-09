@@ -6,9 +6,9 @@ from simulator.doubleQ_simulator import run_simulation
 
 
 if __name__ == "__main__":
-    episodes = 2000   
+    episodes = 1000  
     max_steps = 20
-    deadlines = list(range(50, 800, 4))
+    deadlines = list(range(15, 501, 5))  # 15ms to 500ms
 
     dq_energy, dq_time = [], []
     a2c_energy, a2c_time = [], []
@@ -17,6 +17,7 @@ if __name__ == "__main__":
     cloud_energy, cloud_time = [], []
 
     for d in deadlines:
+        print(f"Running simulations for deadline: {d} ms")
         profiling_data = get_profiling_data(d)
 
         e, t = run_simulation(profiling_data, episodes, max_steps)
@@ -41,11 +42,11 @@ if __name__ == "__main__":
 
     # Plot Energy vs Deadline
     plt.figure(figsize=(8, 6))
-    plt.plot(deadlines, dq_energy, label="Double Q")
-    plt.plot(deadlines, a2c_energy, label="A2C")
-    plt.plot(deadlines, random_energy, label="Random")
-    plt.plot(deadlines, edge_energy, label="All Edge")
-    plt.plot(deadlines, cloud_energy, label="All Cloud")
+    plt.plot(deadlines, dq_energy, label="Double Q", marker='o')
+    plt.plot(deadlines, a2c_energy, label="A2C", marker='*')
+    plt.plot(deadlines, random_energy, label="Random", marker='+')
+    plt.plot(deadlines, edge_energy, label="All Edge", marker='x')
+    plt.plot(deadlines, cloud_energy, label="All Cloud", marker='^')
     plt.xlabel("Deadline (ms)")
     plt.ylabel("Average Energy (Joules)")
     plt.title("Average Energy vs Deadline")
@@ -56,11 +57,11 @@ if __name__ == "__main__":
 
     # Plot Completion Time vs Deadline
     plt.figure(figsize=(8, 6))
-    plt.plot(deadlines, dq_time, label="Double Q")
-    plt.plot(deadlines, a2c_time, label="A2C")
-    plt.plot(deadlines, random_time, label="Random")
-    plt.plot(deadlines, edge_time, label="All Edge")
-    plt.plot(deadlines, cloud_time, label="All Cloud")
+    plt.plot(deadlines, dq_time, label="Double Q", marker='o')
+    plt.plot(deadlines, a2c_time, label="A2C", marker='*')
+    plt.plot(deadlines, random_time, label="Random", marker='+')
+    plt.plot(deadlines, edge_time, label="All Edge", marker='x')
+    plt.plot(deadlines, cloud_time, label="All Cloud", marker='^')
     plt.xlabel("Deadline (ms)")
     plt.ylabel("Average Completion Time (ms)")
     plt.title("Average Completion Time vs Deadline")

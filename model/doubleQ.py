@@ -1,73 +1,112 @@
 import numpy as np
 import random
-from profiling.profile import ProfilingData
-from simulator.simulator import CloudEdgeSimulator
 import pickle
 import os
+from profiling.profile import ProfilingData
+from simulator.simulator import CloudEdgeSimulator
 
 
 class DoubleQLearningAgent:
-    def __init__(self, profiling_data: ProfilingData, alpha=0.25, gamma=0.9, epsilon=0.025):
+    def __init__(
+        self,
+        profiling_data: ProfilingData,
+        alpha: float = 0.1,
+        gamma: float = 0.85,
+        epsilon: float = 0.2,
+        min_epsilon: float = 0.01,
+        epsilon_decay: float = 0.9995,
+    ):
+        """
+        Double Q-learning agent for layer-by-layer offloading decisions.
+
+        Args:
+            profiling_data: ProfilingData object (must provide layer/node counts, timings, powers, etc.)
+            alpha: learning rate
+            gamma: discount factor
+            epsilon: initial epsilon for epsilon-greedy
+            min_epsilon: lower bound for epsilon when decaying
+            epsilon_decay: multiplicative decay applied when decay_epsilon() called
+        """
         self.profiling = profiling_data
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
+        self.min_epsilon = min_epsilon
+        self.epsilon_decay = epsilon_decay
+
+        # Q-tables
         self.Q1 = {}
         self.Q2 = {}
+
+        # Simulator
         self.simulator = CloudEdgeSimulator(profiling_data)
 
-        # ---- Discretization bins ----
-        # Bandwidth in Mbps (range 1–100 Mbps, 20 bins)
-        self.bandwidth_bins = np.linspace(1, 100, 5)
-        # Cloud congestion time in ms (range 0–500 ms, 25 bins)
-        self.cloudtime_bins = np.linspace(0, 500, 5)
+        # --- Discretization bins (coarser than original to avoid state explosion) ---
+        # bandwidth (Mbps) — cap matches simulator cap (1..30)
+        self.bandwidth_bins = np.linspace(1, 30, 6)  # e.g., [1,~6,~11,~16,~21,30]
+        # cloud pending time (ms)
+        self.cloudtime_bins = np.linspace(0, 500, 6)
+        # surplus bins (coarser; avoid extremely fine fragmentation)
+        self.surplus_bins = np.linspace(-10, 10, 41)  # step 0.5
 
-        self.surplus_bins = np.linspace(-10, 10, int((10 - (-10)) / 0.1) + 1)
-
-
-    # ----- Helpers -----
+    # ---------------------------
+    # Utility & discretization
+    # ---------------------------
     def _discretize(self, value, bins):
-        """Map continuous value to nearest bin center."""
-        idx = np.digitize(value, bins) - 1
-        idx = max(0, min(idx, len(bins) - 1))  # clamp
-        return bins[idx]
+        """Return the bin representative for `value`. Uses nearest-bin (index) and returns bin value."""
+        # If bins is a 1D array of representative values, map to the nearest bin index.
+        idx = np.digitize([value], bins, right=True)[0] - 1
+        idx = max(0, min(idx, len(bins) - 1))
+        return float(bins[idx])
+
+    def _action_to_key(self, action):
+        """
+        Convert action array (n x 2) to an immutable tuple representing assignments (0 edge / 1 cloud).
+        Example: array([[layer,0],[layer,1]]) -> (0, 1)
+        """
+        return tuple(int(x) for x in action[:, 1].tolist())
 
     def _state_to_key(self, state):
         """
-        Discretize continuous values and form a stable Q-table key.
-        State = [bandwidth, congestion_time, layer, prev_action, surplus]
+        Map continuous/structured state to a stable key for Q-tables.
+
+        State expected format:
+            (bandwidth, cloud_time_ms, layer, prev_action_array_or_None, surplus, negative_surplus_count)
         """
         bw, ctime, layer, prev_action, surplus, negative_surplus_count = state
 
-        # Discretize continuous values
         bw_disc = self._discretize(float(bw), self.bandwidth_bins)
         ctime_disc = self._discretize(float(ctime), self.cloudtime_bins)
         surplus_disc = self._discretize(float(surplus), self.surplus_bins)
+        layer_i = int(layer)
+        neg_count_i = int(negative_surplus_count)
 
-        base_key = (bw_disc, ctime_disc, int(layer), surplus_disc, int(negative_surplus_count))
+        if prev_action is None:
+            prev_key = None
+        else:
+            prev_key = self._action_to_key(prev_action)
 
-        if prev_action is not None:
-            prev_action_key = self._action_to_key(prev_action)
-            return base_key + (prev_action_key,)
-        return base_key + (None,)
+        # Form a compact tuple key
+        return (bw_disc, ctime_disc, layer_i, surplus_disc, neg_count_i, prev_key)
 
-    def _action_to_key(self, action):
-        """Convert action array into immutable tuple (only assignment col)."""
-        return tuple(int(x) for x in action[:, 1].tolist())
-
+    # ---------------------------
+    # Actions
+    # ---------------------------
     def _get_possible_actions(self, layer_idx):
-        """Generate all possible action patterns for given layer."""
+        """
+        Generate all possible assignments for a given layer.
+        Each action is an array shape (nodes, 2) where column 0 is layer index, column 1 is assignment (0=edge,1=cloud).
+        First and last layers are forced to edge (0) like your original design.
+        """
         nodes = self.profiling.get_num_nodes(layer_idx)
 
-        # First layer → EDGE only
-        if (layer_idx == 0 or layer_idx == (len(self.profiling.layers) - 1)):
+        # First or last layer -> edge only
+        if layer_idx == 0 or layer_idx == (len(self.profiling.layers) - 1):
             a = np.zeros((nodes, 2), dtype=int)
             a[:, 0] = layer_idx
-            a[:, 1] = 0   # 0 = edge
+            a[:, 1] = 0
             return [a]
 
-
-        # Middle layers → all patterns (edge=0, cloud=1)
         actions = []
         for pattern in range(2 ** nodes):
             a = np.zeros((nodes, 2), dtype=int)
@@ -77,71 +116,129 @@ class DoubleQLearningAgent:
             actions.append(a)
         return actions
 
+    def _argmax_with_tiebreak(self, values):
+        """Return index of max with random tie-breaking."""
+        max_val = max(values)
+        candidates = [i for i, v in enumerate(values) if np.isclose(v, max_val)]
+        return random.choice(candidates)
 
-    # ----- Action selection -----
+    # ---------------------------
+    # Action selection
+    # ---------------------------
     def choose_action(self, state):
+        """
+        Epsilon-greedy selection based on sum of Q1 + Q2 (standard Double Q greedy policy uses combined estimates).
+        Note: we still update Q1 or Q2 separately during training.
+        """
         layer = int(state[2])
         actions = self._get_possible_actions(layer)
         s_key = self._state_to_key(state)
 
-        # ε-greedy
-        if (random.random() < self.epsilon) and layer > 0 and layer < (len(self.profiling.layers) - 1) :
+        # Exploration: only on non-terminal internal layers
+        if (random.random() < self.epsilon) and (layer > 0 and layer < (len(self.profiling.layers) - 1)):
             return random.choice(actions)
 
-        q_values = []
+        # Greedy selection based on Q1+Q2
+        q_vals = []
         for a in actions:
-            key = (s_key, self._action_to_key(a))
-            q_values.append(self.Q1.get(key, 0.0) + self.Q2.get(key, 0.0))
+            a_key = self._action_to_key(a)
+            full_key = (s_key, a_key)
+            q1 = self.Q1.get(full_key, 0.0)
+            q2 = self.Q2.get(full_key, 0.0)
+            q_vals.append(q1 + q2)
 
-        return actions[int(np.argmax(q_values))]
+        chosen_idx = self._argmax_with_tiebreak(q_vals)
+        return actions[chosen_idx]
 
+    # ---------------------------
+    # Training (single step)
+    # ---------------------------
+    def train(self, current_state, decay_epsilon: bool = True):
+        """
+        Perform one step of interaction: choose action, query simulator (energy/time), get reward & next state,
+        then update either Q1 or Q2 according to Double Q-learning rules.
 
-    # ----- Training update -----
-    def train(self, current_state):
-        # Choose action
+        Args:
+            current_state: tuple as expected by the simulator
+            decay_epsilon: whether to apply multiplicative epsilon decay after the update
+        Returns:
+            (action, reward, next_state, terminal, energy, completion_time, next_bandwidth)
+        """
+        # Choose and apply action
         action = self.choose_action(current_state)
-        # Environment transition
-        energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= current_state[1])
-        reward, surplus, negative_surplus_count = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time, current_state[4], current_state[5])
-        next_state, terminal, _ = self.simulator.get_next_state(current_state, action, surplus, negative_surplus_count)
 
-        # Decide which Q-table to update
+        # Simulator step(s)
+        energy, completion_time_s = self.simulator.compute_energy_and_time(
+            current_state=current_state, current_action=action, cloud_pending_ms=current_state[1]
+        )
+
+        # Reward computation (simulator returns scaled reward)
+        reward, surplus, negative_surplus_count = self.simulator.calculate_reward(
+            int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5]
+        )
+
+        # Next state from simulator
+        next_state, terminal, _ = self.simulator.get_next_state(
+            current_state, action, surplus, negative_surplus_count
+        )
+
+        # Compose keys
+        cur_key = (self._state_to_key(current_state), self._action_to_key(action))
+
+        # Choose which Q-table to update and perform Double-Q logic properly:
         if random.random() < 0.5:
-            q_table, q_other = self.Q1, self.Q2
+            # Update Q1: select best next action according to Q1, evaluate with Q2
+            q_table = self.Q1
+            q_eval = self.Q2
+            # If terminal -> no next action
+            if terminal:
+                target = reward
+            else:
+                next_actions = self._get_possible_actions(int(next_state[2]))
+                # Choose best next action using Q1
+                best_next_action = max(
+                    next_actions,
+                    key=lambda a: q_table.get((self._state_to_key(next_state), self._action_to_key(a)), 0.0),
+                )
+                eval_value = q_eval.get((self._state_to_key(next_state), self._action_to_key(best_next_action)), 0.0)
+                target = reward + self.gamma * eval_value
         else:
-            q_table, q_other = self.Q2, self.Q1
+            # Update Q2: select best next action according to Q2, evaluate with Q1
+            q_table = self.Q2
+            q_eval = self.Q1
+            if terminal:
+                target = reward
+            else:
+                next_actions = self._get_possible_actions(int(next_state[2]))
+                best_next_action = max(
+                    next_actions,
+                    key=lambda a: q_table.get((self._state_to_key(next_state), self._action_to_key(a)), 0.0),
+                )
+                eval_value = q_eval.get((self._state_to_key(next_state), self._action_to_key(best_next_action)), 0.0)
+                target = reward + self.gamma * eval_value
 
-        # Current key
-        key = (self._state_to_key(current_state), self._action_to_key(action))
-        old_value = q_table.get(key, 0.0)
+        old_value = q_table.get(cur_key, 0.0)
+        q_table[cur_key] = old_value + self.alpha * (target - old_value)
 
-        if terminal:
-            target = reward
-        else:
-            layer_next = int(next_state[2])
-            next_actions = self._get_possible_actions(layer_next)
+        # Optional epsilon decay (call after update)
+        if decay_epsilon:
+            self.decay_epsilon()
 
-            # Best next action
-            best_next_action = max(
-                next_actions,
-                key=lambda a: q_table.get(
-                    (self._state_to_key(next_state), self._action_to_key(a)), 0.0
-                ),
-            )
-            target = reward + self.gamma * q_other.get(
-                (self._state_to_key(next_state), self._action_to_key(best_next_action)), 0.0
-            )
+        return action, reward, next_state, terminal, energy, completion_time_s, next_state[0]
 
-        # Update Q-value
-        q_table[key] = old_value + self.alpha * (target - old_value)
+    # ---------------------------
+    # Epsilon utils & persistence
+    # ---------------------------
+    def decay_epsilon(self):
+        """Decay epsilon multiplicatively but keep above min_epsilon."""
+        self.epsilon = max(self.min_epsilon, self.epsilon * self.epsilon_decay)
+        return self.epsilon
 
-        return action, reward, next_state, terminal, energy, completion_time , next_state[0]
-    
     def save_qtables(self, filename="q_tables.pkl"):
-            """Save Q1 and Q2 tables to disk."""
-            with open(filename, "wb") as f:
-                pickle.dump((self.Q1, self.Q2), f)
-            print(f"Q-tables saved to {filename}")
+        """Save Q1 and Q2 tables to disk."""
+        with open(filename, "wb") as f:
+            pickle.dump((self.Q1, self.Q2), f)
+        print(f"Q-tables saved to {filename}")
 
     def load_qtables(self, filename="q_tables.pkl"):
         """Load Q1 and Q2 tables if file exists, else skip."""
