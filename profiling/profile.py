@@ -55,3 +55,22 @@ class ProfilingData:
         for node_idx in range(len(self.layers[layer_idx])):
             layer_time += self.get_node_edge_time(layer_idx, node_idx)
         return layer_time
+
+    def get_layer_total_edge_power(self, layer_idx):
+
+        total_power = 0.0
+        num_nodes = self.get_num_nodes(layer_idx)
+        for node_idx in range(num_nodes):
+            total_power += self.get_node_edge_power(layer_idx, node_idx)
+        return total_power
+
+    def get_layer_total_edge_time(self, layer_idx):
+        """
+        Return total computation time (ms) for all nodes in a layer.
+        """
+        total_time = 0.0
+        num_nodes = self.get_num_nodes(layer_idx)
+        for node_idx in range(num_nodes):
+            total_time += self.get_node_edge_time(layer_idx, node_idx)
+        return total_time
+

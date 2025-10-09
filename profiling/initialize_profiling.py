@@ -34,11 +34,11 @@ def get_profiling_data(deadline):
         layers=layers,
         node_edge_times=node_edge_times,
         node_cloud_times=node_cloud_times,
-        bandwidth=5.0,
+        bandwidth=15.0,
         rtt=10.0,
         output_size=5,
         node_edge_powers=node_edge_powers,
-        edge_idle_power=4.0,
+        edge_idle_power=2.0,
         deadline=deadline,
         edge_communication_power=5.0,
     )

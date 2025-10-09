@@ -66,7 +66,7 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
             next_state, terminal, cloud_time = simulator.get_next_state(state, action, 0, state[5])
             total_energy, completion_time = simulator.compute_energy_and_time(state, action, cloud_time)
 
-        #             energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= current_state[1])
+        # energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= current_state[1])
         # reward, surplus, negative_surplus_count = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time, current_state[4], current_state[5])
         # next_state, terminal, _ = self.simulator.get_next_state(current_state, action, surplus, negative_surplus_count)
 
@@ -76,6 +76,7 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
             state = next_state
             if terminal:
                 initial_bandwidth = next_state[0]
+                initial_cloud_time = next_state[1]
                 break
 
         # record episode-level results
