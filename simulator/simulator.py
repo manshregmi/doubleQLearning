@@ -31,7 +31,7 @@ class CloudEdgeSimulator:
 
         # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(action[:, 1] == 1)[0]
-        congestion = random.uniform(50, 100)  # stochastic congestion ms
+        congestion = random.uniform(25, 60)  # stochastic congestion ms
         new_cloud_pending = 0.0
         new_cloud_pending += congestion
 
@@ -47,8 +47,8 @@ class CloudEdgeSimulator:
             new_cloud_pending += max(0.0,  cloud_proc_ms)
 
         # Bandwidth update (stochastic)
-        bw_change = random.uniform(-5, 5)  # Mbps fluctuation
-        new_bandwidth = max(1.0, min(bandwidth + bw_change, 30.0))
+        bw_change = random.uniform(-1, 1)  # Mbps fluctuation
+        new_bandwidth = max(1.0, min(bandwidth + bw_change, 10.0))
 
         # Next layer / terminal flag
         terminal = False

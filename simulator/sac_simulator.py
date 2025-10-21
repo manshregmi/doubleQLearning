@@ -12,14 +12,35 @@ from profiling.profile import ProfilingData
 def flatten_state(state, max_layers, max_nodes):
     """
     Flatten tuple state into 6-element vector for SAC network.
+    Applies A2C-style discretization bins to bandwidth, cloud_time, and surplus
+    before normalization.
+
     State: (bandwidth, cloud_time, layer, prev_action, surplus, negative_surplus_count)
     """
-    bw_norm = state[0] / 30.0
-    cloud_time_norm = state[1] / 5000.0
+
+    # --- Discretization bins (same as A2C) ---
+    bandwidth_bins = np.linspace(1, 30, 6)      # Mbps
+    cloudtime_bins = np.linspace(0, 100, 20)    # ms
+    surplus_bins = np.linspace(-5, 5, 21)       # s
+
+    def discretize(value, bins):
+        idx = np.digitize(value, bins) - 1
+        idx = np.clip(idx, 0, len(bins) - 1)
+        return float(bins[idx])
+
+    # --- Apply discretization ---
+    bw_disc = discretize(state[0], bandwidth_bins)
+    ct_disc = discretize(state[1], cloudtime_bins)
+    surplus_disc = discretize(state[4], surplus_bins)
+
+    # --- Normalize for network input ---
+    bw_norm = bw_disc / 30.0
+    cloud_time_norm = ct_disc / 100.0   # cap 0–100 ms
     layer_norm = state[2] / max_layers
-    surplus_norm = state[4] / 2000.0
+    surplus_norm = (surplus_disc + 5) / 10.0  # map [-5,5] → [0,1]
     neg_count_norm = state[5] / 20.0
 
+    # --- Previous action summary ---
     prev_action = state[3]
     prev_action_scalar = 0.0
     if prev_action is not None and prev_action.size > 0:
@@ -27,8 +48,15 @@ def flatten_state(state, max_layers, max_nodes):
         num_nodes = prev_action.shape[0]
         prev_action_scalar = nodes_on_cloud / num_nodes if num_nodes > 0 else 0.0
 
-    flat = np.array([bw_norm, cloud_time_norm, layer_norm,
-                     surplus_norm, neg_count_norm, prev_action_scalar], dtype=np.float32)
+    flat = np.array([
+        bw_norm,
+        cloud_time_norm,
+        layer_norm,
+        surplus_norm,
+        neg_count_norm,
+        prev_action_scalar
+    ], dtype=np.float32)
+
     return flat
 
 # ----------------------------

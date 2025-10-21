@@ -55,7 +55,7 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
         times = []
 
         simulator = CloudEdgeSimulator(profiling_data)
-        initial_bandwidth = 15.0
+        initial_bandwidth = profiling_data.bandwidth
         initial_cloud_time = 0.0
         initial_layer = 0
         prev_action = None
