@@ -40,7 +40,7 @@ class DoubleQLearningAgent:
         # bandwidth (Mbps) — cap matches simulator cap (1..30)
         self.bandwidth_bins = np.linspace(1, 30, 6)  # e.g., [1,~6,~11,~16,~21,30]
         # cloud pending time (ms)
-        self.cloudtime_bins = np.linspace(0, 500, 6)
+        self.cloudtime_bins = np.linspace(0, 100, 20) # step 5 ms
         # surplus bins (coarser; avoid extremely fine fragmentation)
         self.surplus_bins = np.linspace(-5, 5, 21)  # step 0.5 s
 

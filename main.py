@@ -6,14 +6,14 @@ from simulator.doubleQ_simulator import run_simulation
 from simulator.sac_simulator import run_sac_simulation
 
 if __name__ == "__main__":
-    episodes = 500
-    max_steps = 5
-    deadlines = list(range(150, 801, 50))  # 150ms to 800ms
+    episodes = 1000
+    max_steps = 10
+    deadlines = list(range(100, 501, 5))  # 40ms to 300ms
 
     dq_energy, dq_time = [], []
     a2c_energy, a2c_time = [], []
     sac_energy, sac_time = [], []
-    random_energy, random_time = [], []
+    random_energy, random_time = [], []   
     edge_energy, edge_time = [], []
     cloud_energy, cloud_time = [], []
 
