@@ -8,7 +8,7 @@ from simulator.sac_simulator import run_sac_simulation
 if __name__ == "__main__":
     episodes = 1000
     max_steps = 10
-    deadlines = list(range(100, 501, 5))  # 40ms to 300ms
+    deadlines = list(range(200, 501, 10))  # 200ms to 500ms
 
     dq_energy, dq_time = [], []
     a2c_energy, a2c_time = [], []

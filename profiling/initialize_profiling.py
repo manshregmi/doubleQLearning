@@ -3,12 +3,11 @@ from profiling.profile import ProfilingData
 
 def get_profiling_data(deadline):
     layers = [
-        [0],                                             # Node 0
-        [0, 1, 2, 3, 4, 5],                             # Node 1
-        [0, 1, 2, 3, 4, 5, 6],                          # Node 2
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13], # Node 3
-        [0, 1, 2, 3, 4],                                # Node 4
-        [0],                                             # Node 5
+        [0],                                             # layer 0
+        [0, 1, 2, 3, 4, 5],                             # layer 1
+        [0, 1, 2, 3, 4, 5, 6],                          # layer 2
+        [0, 1, 2, 3, 4, 5],                              # layer 3
+        [0],                                             # layer 4
     ]
 
     numberOfEdgeDevice = 3  
@@ -27,13 +26,9 @@ def get_profiling_data(deadline):
 
         # Node 3 (linearly scaled 0–13)
         (3, 0): 30, (3, 1): 25, (3, 2): 38, (3, 3): 42, (3, 4): 46, (3, 5): 50,
-        (3, 6): 54, (3, 7): 58, (3, 8): 62, (3, 9): 66, (3, 10): 70, (3, 11): 74,
-        (3, 12): 78, (3, 13): 82,
 
-        # Node 4 (newly added 0–4)
-        (4, 0): 30, (4, 1): 25, (4, 2): 38, (4, 3): 42, (4, 4): 46,
-        # Node 5 (similar to node 4)
-        (5, 0): 1,
+        # Node 4 (similar to node 4)
+        (4, 0): 1,
     }
 
     # -------------------------------
@@ -51,14 +46,9 @@ def get_profiling_data(deadline):
 
         # Node 3
         (3, 0): 12, (3, 1): 10, (3, 2): 14, (3, 3): 18, (3, 4): 22, (3, 5): 26,
-        (3, 6): 30, (3, 7): 34, (3, 8): 38, (3, 9): 42, (3, 10): 46, (3, 11): 50,
-        (3, 12): 54, (3, 13): 58,
-
-        # Node 4 (very light → always 0)
-        (4, 0): 12, (4, 1): 10, (4, 2): 14, (4, 3): 18, (4, 4): 22,
 
         # Node 5 (same)
-        (5, 0): 0,
+        (4, 0): 0,
     }
 
     # -------------------------------
@@ -78,14 +68,9 @@ def get_profiling_data(deadline):
 
         # Node 3
         (3, 0): 11.542, (3, 1): 10.923, (3, 2): 12.553, (3, 3): 13.076,
-        (3, 4): 13.599, (3, 5): 14.122, (3, 6): 14.645, (3, 7): 15.168,
-        (3, 8): 15.691, (3, 9): 16.214, (3, 10): 16.737, (3, 11): 17.260,
-        (3, 12): 17.783, (3, 13): 18.306,
+        (3, 4): 13.599, (3, 5): 14.122, 
 
-        # Node 4
-        (4, 0): 11.542, (4, 1): 10.923, (4, 2): 12.553, (4, 3): 13.076, (4, 4): 13.599,
-
-        # Node 5 (same as 4)
+        # Node 3
         (5, 0): 0.5,
     }
 
@@ -94,7 +79,7 @@ def get_profiling_data(deadline):
         layers=layers,
         node_edge_times=node_edge_times,
         node_cloud_times=node_cloud_times,
-        bandwidth=8,
+        bandwidth=12,
         rtt=10.0,
         output_size=5,
         node_edge_powers=node_edge_powers,
