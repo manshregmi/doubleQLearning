@@ -10,9 +10,9 @@ class DoubleQLearningAgent:
     def __init__(
         self,
         profiling_data: ProfilingData,
-        alpha: float = 0.001,
-        gamma: float = 0.85,
-        epsilon: float = 0.125,
+        alpha: float = 0.05,
+        gamma: float = 0.95,
+        epsilon: float = 0.1,
     ):
         """
         Double Q-learning agent for layer-by-layer offloading decisions.
