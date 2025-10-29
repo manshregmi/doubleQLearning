@@ -81,7 +81,7 @@ def get_profiling_data(deadline):
         node_cloud_times=node_cloud_times,
         bandwidth=12,
         rtt=10.0,
-        output_size=5,
+        output_size=1,
         node_edge_powers=node_edge_powers,
         edge_idle_power=2.0,
         deadline=deadline,
