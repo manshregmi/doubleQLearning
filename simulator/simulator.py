@@ -35,10 +35,6 @@ class CloudEdgeSimulator:
         new_cloud_pending = 0.0
         new_cloud_pending += congestion
 
-        if isAllCloud:
-            new_cloud_pending*=self.profiling.numberOfEdgeDevice*0.75
-
-
         # If some tasks are assigned to cloud this layer, compute new cloud processing added
         if len(cloud_nodes) > 0:
             # cloud_proc is the maximum cloud processing time among tasks assigned this layer
@@ -46,13 +42,17 @@ class CloudEdgeSimulator:
             # New pending = previous pending (what remains) + new cloud work + congestion
             new_cloud_pending += max(0.0,  cloud_proc_ms)
 
+            if isAllCloud:
+                new_cloud_pending = new_cloud_pending +( max(0, cloud_proc_ms) * (self.profiling.numberOfEdgeDevice - 1)) - congestion
+
         # Bandwidth update (stochastic)
         bw_change = random.uniform(2, -2)  # Mbps fluctuation
+        # bw_change = 0
         new_bandwidth = max(1.0, min(bandwidth + bw_change, 15.0))
 
         # Next layer / terminal flag
         terminal = False
-        if layer + 1 < len(self.profiling.layers):
+        if layer + 1  < len(self.profiling.layers):
             next_layer = layer + 1
         else:
             terminal = True
@@ -64,7 +64,6 @@ class CloudEdgeSimulator:
     def compute_energy_and_time(self, current_state, current_action, cloud_pending_ms):
         bandwidth, _, layer, prev_action, _, negative_surplus_count = current_state
         layer = int(layer)
-
         total_energy = 0.0
         transmission_times = []
 
@@ -80,11 +79,21 @@ class CloudEdgeSimulator:
             for prev_node in prev_assignments:
                 for curr_node in curr_assignments:
                     if prev_node != curr_node:
-                        transmission_time = (
-                            (self.profiling.output_size * 8 * 1024)
-                            / (max(bandwidth, 1e-6) * 1e6)
-                        )
+                        transmission_time = max( (
+                            (self.profiling.get_output_size(layer_idx=layer, node_idx=curr_node)/1024)
+                            / (max(bandwidth, 1e-6))
+                        ), (self.profiling.rtt /1000.0))
                         transmission_times.append(transmission_time)
+        
+        if prev_action is None:
+            # First layer: all edge to cloud transfers for cloud nodes
+            for i in range(len(current_action)):
+                if current_action[i, 1] == 1:  # cloud
+                    transmission_time = max( (
+                        (self.profiling.get_output_size(layer_idx=layer, node_idx=i)/1024)
+                        / (max(bandwidth, 1e-6) )
+                    ), (self.profiling.rtt /1000.0))
+                    transmission_times.append(transmission_time)
 
         # If any transmissions, the bottleneck is the longest one (assuming pipelined/parallel transfers)
         max_transmission_time = max(transmission_times) if transmission_times else 0.0

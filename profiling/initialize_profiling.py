@@ -3,89 +3,113 @@ from profiling.profile import ProfilingData
 
 def get_profiling_data(deadline):
     layers = [
-        [0],                                             # layer 0
-        [0, 1, 2, 3, 4, 5],                             # layer 1
-        [0, 1, 2, 3, 4, 5, 6],                          # layer 2
-        [0, 1, 2, 3, 4, 5],                              # layer 3
-        [0],                                             # layer 4
+        [0],         # v1                level 0                    
+        [0],        # v2                 level 1
+        [0],        # v3                 level 2
+        [0],        # v4+ v7 +v10        level 3
+        [0,1,2],    # v5 v8 v11          level 4
+        [0],         # v6+ v9 + v12      level 5    
+        [0],         # v13               level 6
     ]
-
-    numberOfEdgeDevice = 3  
+    numberOfEdgeDevice = 8  
     # -------------------------------
     # ⏱️ Edge execution times (ms)
     # -------------------------------
     node_edge_times = {
-        # Node 0
-        (0, 0): 1,
+        # level 0
+        (0, 0): 25.8,  #v1
 
-        # Node 1 (linearly scaled 0–5)
-        (1, 0): 35, (1, 1): 28, (1, 2): 22, (1, 3): 16, (1, 4): 10, (1, 5): 4,
+        # Level 1
+        (1, 0): 300.6, #v2
 
-        # Node 2 (linearly scaled 0–6)
-        (2, 0): 45, (2, 1): 40, (2, 2): 35, (2, 3): 30, (2, 4): 25, (2, 5): 20, (2, 6): 15,
+        # Level 2 
+        (2, 0): 5, #v3
 
-        # Node 3 (linearly scaled 0–13)
-        (3, 0): 30, (3, 1): 25, (3, 2): 38, (3, 3): 42, (3, 4): 46, (3, 5): 50,
+        # Level 3 
+        (3, 0): 23,  # max of v4,v7,v10
 
-        # Node 4 (similar to node 4)
-        (4, 0): 1,
+        # level 4
+        (4, 0): 18.5, (4, 1): 105.1, (4, 2): 88.2,  # v5,v8,v11
+
+        # level 5
+        (5,0): 0.4, #max of v6 , v9 , v12
+
+        # level 6
+        (6,0): 0.1, #v13
+
     }
 
     # -------------------------------
     # ☁️ Cloud execution times (ms)
     # -------------------------------
     node_cloud_times = {
-        # Node 0
-        (0, 0): 0,
+       # level 0
+        (0, 0): 8.3,  #v1
 
-        # Node 1 (linearly scaled)
-        (1, 0): 16, (1, 1): 12, (1, 2): 10, (1, 3): 8, (1, 4): 6, (1, 5): 4,
+        # Level 1
+        (1, 0): 13.7, #v2
 
-        # Node 2
-        (2, 0): 20, (2, 1): 24, (2, 2): 28, (2, 3): 32, (2, 4): 36, (2, 5): 40, (2, 6): 44,
+        # Level 2 
+        (2, 0): 2.1, #v3
 
-        # Node 3
-        (3, 0): 12, (3, 1): 10, (3, 2): 14, (3, 3): 18, (3, 4): 22, (3, 5): 26,
+        # Level 3 
+        (3, 0): 4.6,  # max of v4,v7,v10
 
-        # Node 5 (same)
-        (4, 0): 0,
+        # level 4 (similar to node 4)
+        (4, 0): 5.5, (4, 1): 7.0, (4, 2): 7.0,  # v5,v8,v11
+
+        (5,0): 0.2,     #max of v6 , v9 , v12
+
+        (6,0): 0.1,     #v13
     }
 
     # -------------------------------
     # ⚡ Edge power consumption (W)
     # -------------------------------
     node_edge_powers = {
-        # Node 0
-        (0, 0): 0.5,
+         # level 0
+        (0, 0): 5.32,  #v1
 
-        # Node 1
-        (1, 0): 12.132, (1, 1): 11.305, (1, 2): 10.596,
-        (1, 3): 9.887, (1, 4): 9.178, (1, 5): 8.469,
+        # Level 1
+        (1, 0): 8.58, #v2
 
-        # Node 2
-        (2, 0): 13.304, (2, 1): 12.717, (2, 2): 12.130,
-        (2, 3): 11.543, (2, 4): 10.956, (2, 5): 10.369, (2, 6): 9.782,
+        # Level 2 
+        (2, 0): 4.96, #v3
 
-        # Node 3
-        (3, 0): 11.542, (3, 1): 10.923, (3, 2): 12.553, (3, 3): 13.076,
-        (3, 4): 13.599, (3, 5): 14.122, 
+        # Level 3 
+        (3, 0): 5.45,  # max of v4,v7,v10
 
-        # Node 3
-        (5, 0): 0.5,
+        # level 4 (similar to node 4)
+        (4, 0): 8.13, (4, 1): 8.26, (4, 2): 8.26,  # v5,v8,v11
+
+        (5,0): 5.11,     #max of v6 , v9 , v12
+
+        (6,0): 0.1,     #v13
     }
+
+    output_size = {
+        (0,0): 8100,
+        (1,0): 3072,
+        (2,0): 1275,
+        (3,0): 192, # max of v4,v7,v10
+        (4,0): 26.44, (4,1): 192, (4,2): 108,
+        (5,0): 3.72, # max of v6 , v9 , v12
+        (6,0): 0
+    }
+
 
     profiling_data = ProfilingData(
         numberOfEdgeDevice=numberOfEdgeDevice,
         layers=layers,
         node_edge_times=node_edge_times,
         node_cloud_times=node_cloud_times,
-        bandwidth=12,
-        rtt=10.0,
-        output_size=1,
+        bandwidth=6,
+        rtt=4.5,
+        output_size=output_size,
         node_edge_powers=node_edge_powers,
-        edge_idle_power=2.0,
+        edge_idle_power=4.24,
         deadline=deadline,
-        edge_communication_power=5.0,
+        edge_communication_power=5.94,
     )
     return profiling_data
 

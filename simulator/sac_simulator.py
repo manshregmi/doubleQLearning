@@ -142,7 +142,7 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
                 )
                 energy, completion_s = simulator.compute_energy_and_time(current_state, discrete_action, cloud_pending)
                 reward, current_surplus, current_neg_count, _ = simulator.calculate_reward(
-                    current_state[2], energy, completion_s, current_surplus, current_neg_count, isA2C=False
+                    current_state[2], energy, completion_s, current_surplus, current_neg_count, isA2C=True
                 )
 
                 # Flatten action before storing in buffer
@@ -169,10 +169,6 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
 
         # --- Print nicely per episode ---
         print(f"[Ep {ep}] Reward={total_reward:.2f}, Energy={total_energy:.2f}, Time={total_time:.2f} ms")
-        print("  Actions per layer (0=edge,1=cloud):")
-        for l_idx, act in enumerate(actions_taken):
-            print(f"   Layer {l_idx}: {act[:,1]}")  # assignment column only
-
         # Save checkpoint
         try:
             agent.save_checkpoint(checkpoint_file)
