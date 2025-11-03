@@ -99,9 +99,9 @@ class SACAgent:
         state_dim,
         action_dim,
         max_action=1.0,
-        gamma=0.99,
+        gamma=0.95,
         tau=0.005,
-        alpha=0.2,
+        alpha=0.1,
         buffer_capacity=100000,
         batch_size=64,
         device=None,
@@ -131,7 +131,7 @@ class SACAgent:
         self.critic2_optimizer = optim.Adam(self.critic2.parameters(), lr=3e-4)
 
     # ---------------------------
-    def select_action(self, state, layer, simulator, epsilon=0.2, evaluate=False):
+    def select_action(self, state, layer, simulator, epsilon=0.075, evaluate=False):
         """
         Returns a discrete action matrix for a given layer using SAC output.
 
@@ -147,8 +147,8 @@ class SACAgent:
         """
         nodes = simulator.profiling.get_num_nodes(layer)
 
-        # 1. First or last layer -> edge only
-        if layer == 0 or layer == len(simulator.profiling.layers) - 1:
+        # last layer -> edge only
+        if layer == len(simulator.profiling.layers) - 1:
             a = np.zeros((nodes, 2), dtype=int)
             a[:, 0] = layer
             a[:, 1] = 0

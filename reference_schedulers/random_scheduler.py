@@ -15,7 +15,7 @@ def get_random_action(profiling_data: ProfilingData, layer_idx: int):
     a = np.zeros((num_nodes, 2), dtype=int)
     a[:, 0] = layer_idx
 
-    if layer_idx == 0 or layer_idx == (len(profiling_data.layers) - 1):
+    if layer_idx == (len(profiling_data.layers) - 1):
         a[:, 1] = 0  # first & last layer forced to edge
     else:
         for node in range(num_nodes):
@@ -36,7 +36,7 @@ def get_all_cloud_action(profilingData: ProfilingData, layer_idx: int):
     num_nodes = profilingData.get_num_nodes(layer_idx)
     a = np.zeros((num_nodes, 2), dtype=int)
     a[:, 0] = layer_idx
-    if layer_idx == 0 or layer_idx == (len(profilingData.layers) - 1):
+    if layer_idx == (len(profilingData.layers) - 1):
         a[:, 1] = 0  # input/output must be edge
     else:
         a[:, 1] = 1  # all cloud

@@ -4,11 +4,13 @@ from reference_schedulers.random_scheduler import run_random_scheduler
 from simulator.a2c_simulator import run_a2c_simulation
 from simulator.doubleQ_simulator import run_simulation
 from simulator.sac_simulator import run_sac_simulation
+import numpy as np
+
 
 if __name__ == "__main__":
-    episodes = 1000
+    episodes = 100
     max_steps = 10
-    deadlines = list(range(200, 501, 10))  # 200ms to 500ms
+    deadlines = list(range(100, 551, 10))  # 20ms to 700ms
 
     dq_energy, dq_time = [], []
     a2c_energy, a2c_time = [], []
@@ -76,3 +78,12 @@ if __name__ == "__main__":
     plt.grid(True, linestyle="--", alpha=0.6)
     plt.tight_layout()
     plt.show()
+
+
+    print("Simulations completed.")
+    print("all cloud energy", np.mean(cloud_energy))
+    print("all edge energy", np.mean(edge_energy))
+    print("dq energy", np.mean(dq_energy))
+    print("a2c energy", np.mean(a2c_energy))
+    print("sac energy", np.mean(sac_energy))
+    print("random energy", np.mean(random_energy))

@@ -4,7 +4,7 @@ import random
 from simulator.simulator import CloudEdgeSimulator
 
 class A2CAgent:
-    def __init__(self, profiling_data, alpha_v=0.1, alpha_p=0.1, gamma=0.9, epsilon=0.1):
+    def __init__(self, profiling_data, alpha_v=0.1, alpha_p=0.1, gamma=0.9, epsilon=0.075):
         self.profiling = profiling_data
         self.alpha_v = alpha_v
         self.alpha_p = alpha_p
@@ -60,6 +60,15 @@ class A2CAgent:
 
     def get_possible_actions(self, layer):
         nodes = self.profiling.get_num_nodes(layer)
+
+        # ✅ If last layer → force all nodes to run on edge (action = 0)
+        if layer == len(self.profiling.layers) - 1:
+            a = np.zeros((nodes, 2), dtype=int)
+            a[:, 0] = layer  # layer index
+            a[:, 1] = 0      # edge only
+            return [a]
+
+        # Otherwise compute all binary offload patterns
         actions = []
         for pattern in range(2 ** nodes):
             a = np.zeros((nodes, 2), dtype=int)
@@ -67,6 +76,7 @@ class A2CAgent:
             for i in range(nodes):
                 a[i, 1] = (pattern >> i) & 1
             actions.append(a)
+
         return actions
 
     def get_action(self, state):
@@ -74,13 +84,24 @@ class A2CAgent:
         layer = int(state[2])
         actions = self.get_possible_actions(layer)
 
-        if random.random() < self.epsilon or state_key not in self.policy_table:
+        # ✅ Initialize policy for unseen state (uniform distribution)
+        if state_key not in self.policy_table:
+            self.policy_table[state_key] = np.ones(len(actions)) / len(actions)
+
+        # ✅ Last layer: return forced action (edge only)
+        if layer == len(self.profiling.layers) - 1:
+            return actions[0]   # only one valid action exists
+
+        # ✅ ε-greedy exploration (only for non-last layers)
+        if random.random() < self.epsilon:
             return random.choice(actions)
 
+        # ✅ Sample from learned policy
         probs = self.policy_table[state_key]
-        probs /= np.sum(probs)
+        probs = probs / np.sum(probs)  # normalize
         idx = np.random.choice(len(actions), p=probs)
         return actions[idx]
+
 
     # ---------- CORE TRAIN FUNCTION ----------
     def train(self, current_state):

@@ -10,9 +10,9 @@ class DoubleQLearningAgent:
     def __init__(
         self,
         profiling_data: ProfilingData,
-        alpha: float = 0.05,
+        alpha: float = 0.075,
         gamma: float = 0.95,
-        epsilon: float = 0.1,
+        epsilon: float = 0.075,
     ):
         """
         Double Q-learning agent for layer-by-layer offloading decisions.
@@ -95,8 +95,8 @@ class DoubleQLearningAgent:
         """
         nodes = self.profiling.get_num_nodes(layer_idx)
 
-        # First or last layer -> edge only
-        if layer_idx == 0 or layer_idx == (len(self.profiling.layers) - 1):
+        # last layer -> edge only
+        if layer_idx == (len(self.profiling.layers) - 1):
             a = np.zeros((nodes, 2), dtype=int)
             a[:, 0] = layer_idx
             a[:, 1] = 0
@@ -169,7 +169,7 @@ class DoubleQLearningAgent:
 
         # Reward computation (simulator returns scaled reward)
         reward, surplus, negative_surplus_count, fractional_deadline = self.simulator.calculate_reward(
-            int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5]
+            int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5], isA2C=True
         )
         surplus /= 1000.0  # convert to seconds
 
