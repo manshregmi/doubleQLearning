@@ -157,9 +157,9 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
 
                 # Reward computation (simulator returns scaled reward)
                 reward, surplus, negative_surplus_count, fractional_deadline = simulator.calculate_reward(
-                    int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5], isA2C=False
+                    int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5], isA2C=True
                 )
-                surplus /= 1000.0  # convert to seconds
+                # surplus /= 1000.0  # convert to seconds
 
                 # Next state from simulator
                 next_state, terminal, _ = simulator.get_next_state(
@@ -197,13 +197,13 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
         # --- Print nicely per episode ---
         print(f"[Ep {ep}] Reward={total_reward:.2f}, Energy={total_energy:.2f}, Time={total_time:.2f} ms")
         # Save checkpoint
-        try:
-            agent.save_checkpoint(checkpoint_file)
-            # print(f"[SAC] ✅ Checkpoint saved -> {checkpoint_file}")
-        except Exception as e:
-            print(f"Failed to save checkpoint: {e}")
+    try:
+        agent.save_checkpoint(checkpoint_file)
+        # print(f"[SAC] ✅ Checkpoint saved -> {checkpoint_file}")
+    except Exception as e:
+        print(f"Failed to save checkpoint: {e}")
 
-    print(f"SAC Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}")
+    print(f"SAC Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, average reward: {np.mean(edge_energy_log):.3f}")
     print(f"SAC Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}")        
 
     return np.mean(edge_energy_log), np.mean(completion_time_log)
