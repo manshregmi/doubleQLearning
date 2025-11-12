@@ -203,7 +203,7 @@ class CloudEdgeSimulator:
             reward -= 10000 * abs(layer_surplus_ms / fractional_deadline_ms)
 
         if isA2C:
-            reward = 10 * np.tanh(reward / 1000.0)
+            reward = 10 * np.tanh(reward / 100000.0)
 
         return reward, layer_surplus_ms, negative_surplus_count, fractional_deadline_ms
 
