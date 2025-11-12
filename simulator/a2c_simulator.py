@@ -67,7 +67,7 @@ def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=
         edge_energy.append(total_edge_energy)
         completion_time.append(total_completion_time)
         rewards.append(total_reward)
-        # print(f"Episode {ep}, Energy: {total_edge_energy:.3f}, Time: {total_completion_time:.3f}, Reward: {total_reward:.3f}")
+        print(f"Episode {ep}, Energy: {total_edge_energy:.3f}, Time: {total_completion_time:.3f}, Reward: {total_reward:.3f}")
 
 
     E = np.array(edge_energy)

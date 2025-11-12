@@ -45,3 +45,71 @@ def run_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=20):
     print(f"DQ Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, Lower Bound: {T.min():.3f} ms, Upper Bound: {T.max():.3f} ms, Lowest index: {np.argmin(T)}, Reward at that index: {rewards[np.argmin(T)]:.3f} energy at that index: {E[np.argmin(T)]:.3f} J")
     return E.mean(), T.mean()
 
+
+
+def run_simulation_all(profiling_data: ProfilingData, episodes=10000):
+    """
+    Run full-task Double Q-learning simulation.
+    Each episode = one full task execution.
+    The agent predicts one full assignment plan,
+    simulator executes it, and we get a single reward for the task.
+    """
+    agent = DoubleQLearningAgent(profiling_data, is_test=False)
+    agent.load_qtables()
+
+    all_energies = []
+    all_times = []
+    all_rewards = []
+    bandwidth = profiling_data.bandwidth
+
+
+    for ep in range(episodes):
+        # Each episode starts from the same initial state (no progression)
+        cloud_time = np.random.uniform(10, 50)
+        surplus = 0.0
+        neg_count = 0
+        prev_action = None
+
+        # The "state" represents the global condition before the task starts
+        current_state = (bandwidth, cloud_time, 0, prev_action, surplus, neg_count)
+
+        # Perform one training step (predict whole plan + update Q-tables)
+        action_plan, reward, _, terminal, total_energy, total_time, bandwidth = agent.train_all(current_state)
+
+        all_energies.append(total_energy)
+        all_times.append(total_time)
+        all_rewards.append(reward)
+
+        if (ep + 1) % 100 == 0:
+            print(
+                f"[Episode {ep+1}] Energy: {total_energy:.3f} J, "
+                f"Time: {total_time:.3f} ms, Reward: {reward:.3f}"
+            )
+
+    # Save Q-tables after training
+    try:
+        agent.save_qtables()
+    except Exception as e:
+        print(f"Error saving Q-tables: {e}")
+
+    E = np.array(all_energies)
+    T = np.array(all_times)
+    R = np.array(all_rewards)
+
+    print("\n=== Simulation Summary ===")
+    print(
+        f"Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, "
+        f"Min: {E.min():.3f} J, Max: {E.max():.3f}, "
+        f"Best Ep (min energy): {np.argmin(E)}"
+    )
+    print(
+        f"Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, "
+        f"Min: {T.min():.3f} ms, Max: {T.max():.3f}, "
+        f"Best Ep (min time): {np.argmin(T)}"
+    )
+    print(
+        f"Avg Reward: {R.mean():.3f}, Max: {R.max():.3f}, "
+        f"At Ep {np.argmax(R)}"
+    )
+
+    return E.mean(), T.mean(), R.mean()

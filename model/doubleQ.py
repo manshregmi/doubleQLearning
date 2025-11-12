@@ -79,6 +79,45 @@ class DoubleQLearningAgent:
             actions.append(a)
         return actions
 
+    def _get_possible_full_actions(self):
+        """
+        Generate all possible assignment plans (one per task).
+        Each plan is a list of layer-wise node assignments (0=edge, 1=cloud).
+        For simplicity, assume each layer has N_i nodes -> 2^(sum N_i) combinations (may be pruned).
+        """
+        layer_node_counts = [self.profiling.get_num_nodes(i) for i in range(len(self.profiling.layers))]
+        total_nodes = sum(layer_node_counts)
+
+        # If total_nodes is large, sample a subset
+        all_patterns = []
+        max_combos = 2 ** total_nodes
+        if max_combos > 5000:  # too large, sample randomly
+            sample_count = 1000
+            for _ in range(sample_count):
+                plan = []
+                offset = 0
+                for layer_idx, n in enumerate(layer_node_counts):
+                    a = np.zeros((n, 2), dtype=int)
+                    a[:, 0] = layer_idx
+                    a[:, 1] = np.random.randint(0, 2, size=n)
+                    plan.append(a)
+                all_patterns.append(plan)
+        else:
+            for pattern in range(max_combos):
+                bits = [int(b) for b in format(pattern, f"0{total_nodes}b")]
+                plan = []
+                offset = 0
+                for layer_idx, n in enumerate(layer_node_counts):
+                    a = np.zeros((n, 2), dtype=int)
+                    a[:, 0] = layer_idx
+                    a[:, 1] = bits[offset : offset + n]
+                    plan.append(a)
+                    offset += n
+                all_patterns.append(plan)
+
+        return all_patterns
+        
+    
     def _argmax_with_tiebreak(self, values):
         """Return index of max with random tie-breaking."""
         max_val = max(values)
@@ -118,6 +157,32 @@ class DoubleQLearningAgent:
             chosen_idx = self._argmax_with_tiebreak(q_vals)
 
         return actions[chosen_idx]
+    
+    def choose_action_all(self, state):
+        """
+        Choose a full-task assignment plan using epsilon-greedy policy.
+        """
+        actions = self._get_possible_full_actions()
+        s_key = self._state_to_key(state)
+
+        # ε-greedy exploration
+        if (not self.is_test) and (random.random() < self.epsilon):
+            return random.choice(actions)
+
+        q_vals = []
+        for plan in actions:
+            a_key = tuple([tuple(x[:, 1].tolist()) for x in plan])  # plan key
+            q1 = self.Q1.get((s_key, a_key), 0.0)
+            q2 = self.Q2.get((s_key, a_key), 0.0)
+            q_vals.append(q1 + q2)
+
+        if self.is_test:
+            chosen_idx = int(np.argmax(q_vals))
+        else:
+            chosen_idx = self._argmax_with_tiebreak(q_vals)
+
+        return actions[chosen_idx]
+        
 
     # ---------------------------
     # Training (single step)
@@ -193,6 +258,65 @@ class DoubleQLearningAgent:
         q_table[cur_key] = old_value + self.alpha * (target - old_value)
 
         return action, reward, next_state, terminal, energy, completion_time_s, next_state[0], surplus, fractional_deadline
+    
+    def handle_ndim_action(self, current_action):
+        """
+        Normalize current_action to a standard format.
+        Handles scalar, 1D, 2D, and None.
+        Returns a NumPy array suitable for indexing.
+        """
+        if current_action is None:
+            return np.array([])  # empty array for no previous action
+
+        if isinstance(current_action, (int, np.integer)):
+            return np.array([current_action])
+        elif isinstance(current_action, np.ndarray):
+            if current_action.ndim == 1:
+                return current_action
+            else:
+                return current_action[:, 1]  # extract offloading decisions
+        else:
+            raise ValueError(f"Unexpected action type: {type(current_action)}")
+
+
+    def train_all(self, state):
+        """
+        Perform one training episode for a full task.
+        The agent predicts a full assignment plan, simulator executes it,
+        and a single reward is computed for the entire task.
+        """
+        action_plan = self.choose_action_all(state)
+
+        initial_bandwidth = state[0]
+
+        # Run full simulation using this plan
+        total_energy, total_time, reward, bandwidth = self.simulator.run_full_task(action_plan, initial_bandwidth)
+
+        # Terminal since full task done
+        terminal = True
+        next_state = None
+
+        if self.is_test:
+            return action_plan, reward, next_state, terminal, total_energy, total_time
+
+        # Double Q-learning update
+        cur_key = (
+                self._state_to_key(state),
+                tuple([tuple(self.handle_ndim_action(x).tolist()) for x in action_plan])
+            )
+
+
+        if random.random() < 0.5:
+            q_table, q_eval = self.Q1, self.Q2
+        else:
+            q_table, q_eval = self.Q2, self.Q1
+
+        target = reward  # single-step episode (no next state)
+        old_val = q_table.get(cur_key, 0.0)
+        q_table[cur_key] = old_val + self.alpha * (target - old_val)
+
+        return action_plan, reward, next_state, terminal, total_energy, total_time, bandwidth
+            
 
     # ---------------------------
     # Persistence

@@ -3,17 +3,17 @@ from profiling.initialize_profiling import get_profiling_data
 import matplotlib.pyplot as plt
 from reference_schedulers.random_scheduler import run_random_scheduler
 from simulator.a2c_simulator import run_a2c_simulation
-from simulator.doubleQ_simulator import run_simulation
+from simulator.doubleQ_simulator import run_simulation, run_simulation_all
 from simulator.sac_simulator import run_sac_simulation
 import numpy as np
 
 
 if __name__ == "__main__":
-    episodes = 10
+    episodes = 50000
     max_steps = 10
     deadlines = list(range(300, 605, 3))  # 1ms to 700ms
 
-    dq_energy, dq_time = [], []
+    dq_energy, dq_time, dq_r = [], [], []
     a2c_energy, a2c_time = [], []
     sac_energy, sac_time = [], []
     random_energy, random_time = [], []   
@@ -24,17 +24,17 @@ if __name__ == "__main__":
         print("Running simulations for deadline: {} ms".format(d))
         profiling_data = get_profiling_data(d)
 
-        # e, t = run_simulation(profiling_data, 10, max_steps)
-        # dq_energy.append(e)
-        # dq_time.append(t)
+        e, t, r = run_simulation_all(profiling_data, 10)
+        dq_energy.append(e)
+        dq_time.append(t)
 
-        a2c_e, a2c_t = run_a2c_simulation(profiling_data, episodes, max_steps)
-        a2c_energy.append(a2c_e)
-        a2c_time.append(a2c_t)
+        # a2c_e, a2c_t = run_a2c_simulation(profiling_data, episodes, max_steps)
+        # a2c_energy.append(a2c_e)
+        # a2c_time.append(a2c_t)
 
-        sac_e, sac_t = run_sac_simulation(profiling_data, episodes, max_steps)
-        sac_energy.append(sac_e)
-        sac_time.append(sac_t)
+        # sac_e, sac_t = run_sac_simulation(profiling_data, episodes, max_steps)
+        # sac_energy.append(sac_e)
+        # sac_time.append(sac_t)
 
         # re, rt = run_random_scheduler(profiling_data, 100, max_steps, is_random=True, is_all_cloud=False)
         # random_energy.append(re)
@@ -84,7 +84,7 @@ if __name__ == "__main__":
     print("Simulations completed.")
     # print("all cloud energy", np.mean(cloud_energy))
     # print("all edge energy", np.mean(edge_energy))
-    # print("dq energy", np.mean(dq_energy))
-    print("a2c energy", np.mean(a2c_energy))
-    print("sac energy", np.mean(sac_energy))
+    print("dq energy", np.mean(dq_energy),"time", np.mean(dq_time), "reward", np.mean(dq_r))
+    # print("a2c energy", np.mean(a2c_energy))
+    # print("sac energy", np.mean(sac_energy))
     # print("random energy", np.mean(random_energy))
