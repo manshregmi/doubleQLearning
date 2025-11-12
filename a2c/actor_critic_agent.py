@@ -19,11 +19,9 @@ class A2CAgent:
 
         # --- Discretization bins ---
         # Bandwidth (Mbps)
-        self.bandwidth_bins = np.linspace(1, 15, 6)      # [1, ~4.8, ~8.6, ~12.4, ~16.2, 30]
-        # Cloud pending time (ms)
-        self.cloudtime_bins = np.linspace(0, 100, 20)    # step ≈5.26 ms
-        # Surplus (s)
-        self.surplus_bins = np.linspace(-5, 5, 21)       # step 0.5 s
+        self.bandwidth_bins = np.linspace(1, 15, 6)
+        self.cloudtime_bins = np.linspace(0, 100, 20)
+        self.surplus_bins = np.linspace(-300, 300, 100)
 
     # ---------- STATE / ACTION HANDLING ----------
     def action_to_key_part(self, action_matrix):
@@ -125,9 +123,9 @@ class A2CAgent:
 
         # Reward computation (simulator returns scaled reward)
         reward, surplus, negative_surplus_count, fractional_deadline = self.simulator.calculate_reward(
-            int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5], isA2C=False
+            int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5], isA2C=True
         )
-        surplus /= 1000.0  # convert to seconds
+        # surplus /= 1000.0  # convert to seconds
 
         # Next state from simulator
         next_state, terminal, _ = self.simulator.get_next_state(

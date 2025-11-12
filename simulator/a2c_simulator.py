@@ -62,20 +62,23 @@ def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=
             if terminal:
                 bandwidth = next_state_tuple[0]  
                 break
-        try:
-            agent.save_tables()
-        except Exception as e:
-            print(f"Error saving A2C tables at episode {ep}: {e}")
-        print(f"Episode {ep}, Energy: {total_edge_energy:.3f}, Time: {total_completion_time:.3f}, Reward: {total_reward:.3f}")
-        
+
         # ✅ store episode stats
         edge_energy.append(total_edge_energy)
         completion_time.append(total_completion_time)
         rewards.append(total_reward)
+        # print(f"Episode {ep}, Energy: {total_edge_energy:.3f}, Time: {total_completion_time:.3f}, Reward: {total_reward:.3f}")
+
 
     E = np.array(edge_energy)
     T = np.array(completion_time)
 
-    print(f"A2C Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}")
+    try:
+        agent.save_tables()
+    except Exception as e:
+        print(f"Error saving A2C tables at episode {ep}: {e}")
+        
+
+    print(f"A2C Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f} , average reward: {np.mean(rewards):.3f}")
     print(f"A2C Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}")
     return E.mean(), T.mean()

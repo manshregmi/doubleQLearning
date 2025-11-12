@@ -166,69 +166,44 @@ class CloudEdgeSimulator:
         isA2C=False,
     ):
         """
-        Reward = High when energy is low and the overall computation 
-        remains within the global deadline (via fractional deadlines).
-
-        Uses 'surplus' (ms) to propagate time savings or overruns across layers.
+        Reward = High when energy is low and completion is within the fractional deadline.
+        If isA2C=True, the raw (negative) reward is normalized into [0, 10].
         """
 
-        # --- 1. Compute fractional deadline for this layer (in ms) ---
         fractional_deadline_ms = (
             self.profiling.get_edge_time_for_layer(layer)
             / self.profiling.get_total_edge_time()
         ) * self.profiling.deadline
 
-        # --- 2. Convert completion time to ms ---
         completion_time_ms = completion_time_s * 1000.0
+        layer_surplus_ms = fractional_deadline_ms + previous_surplus - completion_time_ms
 
-        # --- 3. Compute surplus in ms ---
-        # Positive surplus => finished early
-        # Negative surplus => exceeded local deadline
-        layer_surplus_ms = fractional_deadline_ms + (previous_surplus) - completion_time_ms
+        lambda_param_e = 5.0
+        lambda_param_d = 5.0
 
-        # --- 4. λ (trade-off between energy and delay) ---
-        if not isA2C:
-            lambda_param_e = 5.0
-            lambda_param_d = 5.0
-        else:
-            lambda_param_e = 1
-            lambda_param_d = 1
-        # --- 5. Penalties ---
         if layer_surplus_ms < 0:
             delay_penalty = abs(layer_surplus_ms) * lambda_param_d
         else:
             delay_penalty = 0.0
 
-        # --- 6. Combine penalties smoothly ---
-        # Normalize surplus to seconds scale for sigmoid stability
-        norm_surplus = layer_surplus_ms / 1000.0  # scaling prevents overflow
+        norm_surplus = layer_surplus_ms / 1000.0
         sigmoid_weight = 1 / (1 + np.exp(-norm_surplus))
-
-        # sigmoid_weight = round(sigmoid_weight, 2)
 
         energy_weight = lambda_param_e * sigmoid_weight
         delay_weight = lambda_param_d * (1 - sigmoid_weight)
-        total_penalty = (energy_weight * (total_energy * 100) )+ delay_weight * delay_penalty
 
-        # --- 7. Reward computation ---
-        reward = -total_penalty
+        total_penalty = (
+            energy_weight * ((total_energy * 100) if not isA2C else total_energy)
+            + delay_weight * delay_penalty
+        )
 
-        # --- 8. Local bonuses/penalties ---
+        reward = -total_penalty  # <-- still negative = cost to minimize
+
         if layer_surplus_ms < 0:
-        #     if (not isA2C):
-        #         reward += (500 * (layer_surplus_ms / fractional_deadline_ms))
-        #     else:
-        #         reward += 0.5
-        # else:
-            if (not isA2C):
-                reward -= 10 * abs(layer_surplus_ms / fractional_deadline_ms)
-            else:
-                reward -= 10000 * abs(layer_surplus_ms / fractional_deadline_ms)
+            reward -= 10000 * abs(layer_surplus_ms / fractional_deadline_ms)
 
-        # print(f"Layer {layer} | Energy: {total_energy:.4f} J | Time: {completion_time_ms:.2f} ms | Surplus: {layer_surplus_ms:.2f} ms | Reward: {reward:.2f}")
+        if isA2C:
+            reward = 10 * np.tanh(reward / 1000.0)
 
-        # --- 9. Return ---
         return reward, layer_surplus_ms, negative_surplus_count, fractional_deadline_ms
-
-
 
