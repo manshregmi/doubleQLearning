@@ -25,13 +25,14 @@ class CloudEdgeSimulator:
             actions.append(a)
         return actions        
 
-    def get_next_state(self, current_state, action, surplus, negative_surplus_count, isAllCloud= False):
-        bandwidth, cloud_time_pending_ms, layer, previous_action, _, negative_surplus_count = current_state
-        layer = int(layer)
+
+    def get_next_state_cloud_waiting_time(self, next_layer, current_action, isAllCloud= False):
+        layer = int(next_layer)
 
         # Determine which nodes are on the cloud for this action
-        cloud_nodes = np.where(action[:, 1] == 1)[0]
-        congestion = random.uniform(15, 50)  # stochastic congestion ms
+        cloud_nodes = np.where(current_action[:, 1] == 1)[0]
+        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0, 0.5))
+        # congestion = 0.0
         new_cloud_pending = 0.0
         new_cloud_pending += congestion
 
@@ -39,14 +40,30 @@ class CloudEdgeSimulator:
         if len(cloud_nodes) > 0:
             # cloud_proc is the maximum cloud processing time among tasks assigned this layer
             cloud_proc_ms = max(self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes)
-            # New pending = previous pending (what remains) + new cloud work + congestion
+            # New pending =  new cloud work + congestion
             new_cloud_pending += max(0.0,  cloud_proc_ms)
+        
+        # Determine which nodes are on the cloud for this action
+        cloud_nodes = np.where(current_action[:, 1] == 1)[0]
+        # congestion = random.uniform(15, 50)  # stochastic congestion ms
 
-            if isAllCloud:
-                new_cloud_pending = new_cloud_pending +( max(0, cloud_proc_ms) * (self.profiling.numberOfEdgeDevice - 1)) - congestion
+        # If some tasks are assigned to cloud this layer, compute new cloud processing added
+        if isAllCloud and len(cloud_nodes) > 0:
+            # cloud_proc is the maximum cloud processing time among tasks assigned this layer
+            cloud_proc_ms = max(self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes)
+            # New pending = previous pending (what remains) + new cloud work + congestion
+            new_cloud_pending = max(0.0,  cloud_proc_ms)*self.profiling.numberOfEdgeDevice
 
+
+        return  new_cloud_pending
+
+    def get_next_state(self, current_state, action, surplus, negative_surplus_count, new_cloud_pending):
+        bandwidth, _, layer, _, _, negative_surplus_count = current_state
+        layer = int(layer)
+
+        
         # Bandwidth update (stochastic)
-        bw_change = random.uniform(2, -2)  # Mbps fluctuation
+        bw_change = np.random.normal(-0.5, 0.5)
         # bw_change = 0
         new_bandwidth = max(1.0, min(bandwidth + bw_change, 15.0))
 
@@ -65,63 +82,77 @@ class CloudEdgeSimulator:
         bandwidth, _, layer, prev_action, _, negative_surplus_count = current_state
         layer = int(layer)
         total_energy = 0.0
+        profiling = self.profiling
+        deps = profiling.dependencies
+
+        # --- Transmission Time (Dependency-based) ---
         transmission_times = []
 
-        # --- Transmission time calculation ---
-        # For each node, if its assignment changed from previous layer -> transmission needed.
-        if prev_action is not None:
+        if prev_action is not None and layer > 0:
             prev_assignments = np.asarray(prev_action[:, 1], dtype=int)
             curr_assignments = np.asarray(current_action[:, 1], dtype=int)
 
-            # Different node counts: compare via cross-layer transfers
-            # Transmission only occurs between layers when assignments differ
-            # (Edge → Cloud or Cloud → Edge)
-            for prev_node in prev_assignments:
-                for curr_node in curr_assignments:
-                    if prev_node != curr_node:
-                        transmission_time = max( (
-                            (self.profiling.get_output_size(layer_idx=layer, node_idx=curr_node)/1024)
-                            / (max(bandwidth, 1e-6))
-                        ), (self.profiling.rtt /1000.0))
+            for curr_node in range(len(curr_assignments)):
+                parent_nodes = deps.get((layer, curr_node), [])
+                for (p_layer, p_node) in parent_nodes:
+                    parent_loc = prev_assignments[p_node] if p_layer == layer - 1 else 0
+                    curr_loc = curr_assignments[curr_node]
+
+                    # Transmission only if parent and child are on different locations
+                    if parent_loc != curr_loc:
+                        output_size = profiling.get_output_size(p_layer, p_node)
+                        transmission_time = max(
+                            (output_size / 1024.0) / max(bandwidth, 1e-6),
+                            profiling.rtt / 1000.0
+                        )
                         transmission_times.append(transmission_time)
-        
-        if prev_action is None:
-            # First layer: all edge to cloud transfers for cloud nodes
+
+        else:
+            # First layer → upload input to cloud if cloud execution
             for i in range(len(current_action)):
                 if current_action[i, 1] == 1:  # cloud
-                    transmission_time = max( (
-                        (self.profiling.get_output_size(layer_idx=layer, node_idx=i)/1024)
-                        / (max(bandwidth, 1e-6) )
-                    ), (self.profiling.rtt /1000.0))
+                    transmission_time = max(
+                        (profiling.get_input_size() / 1024.0) / max(bandwidth, 1e-6),
+                        profiling.rtt / 1000.0
+                    )
                     transmission_times.append(transmission_time)
 
-        # If any transmissions, the bottleneck is the longest one (assuming pipelined/parallel transfers)
+        # Bottleneck = longest dependent transmission
         max_transmission_time = max(transmission_times) if transmission_times else 0.0
         if max_transmission_time > 0:
-            total_energy += self.profiling.edge_communication_power * max_transmission_time
+            total_energy += profiling.edge_communication_power * max_transmission_time
 
-        # --- Edge tasks energy ---
-        edge_total_time_s = 0.0
+        # --- Edge Processing Energy ---
+        edge_times = []
+        edge_energy = []
         for i in range(len(current_action)):
-            if current_action[i, 1] == 0:  # edge
-                node_p = self.profiling.get_node_edge_power(layer, i)  # W
-                node_t_s = self.profiling.get_node_edge_time(layer, i) / 1000.0  # ms → s
-                edge_total_time_s += node_t_s
-                total_energy += (node_p * node_t_s)  # J
+            if current_action[i, 1] == 0:  # edge node
+                node_p = profiling.get_node_edge_power(layer, i)
+                node_t_s = profiling.get_node_edge_time(layer, i) / 1000.0
+                edge_energy.append(node_p * node_t_s)
+                edge_times.append(node_t_s)
 
-        # --- Cloud idle/busy energy ---
-        cloud_pending_s = cloud_pending_ms / 1000.0
+        # Parallel execution only at layer 3 and layer 5
+        if layer in [3, 5]:
+            edge_total_time_s = max(edge_times) if edge_times else 0.0
+            total_energy += max(edge_energy) if edge_energy else 0.0
+        else:
+            edge_total_time_s = sum(edge_times)
+            total_energy += sum(edge_energy)
+
+        # --- Cloud Idle Energy ---
         actual_idle_time_s = 0.0
-        if np.any(current_action[:, 1] == 1):  # some tasks on cloud
-            # If cloud has pending work, edge processing time may be overlapped with cloud pending time.
+        if np.any(current_action[:, 1] == 1):  # any node on cloud
+            cloud_pending_s = cloud_pending_ms / 1000.0
             actual_idle_time_s = max(0.0, cloud_pending_s - edge_total_time_s)
-            total_energy += self.profiling.edge_idle_power * actual_idle_time_s  # J
+            total_energy += profiling.edge_idle_power * actual_idle_time_s
 
-        # --- Completion time (s) ---
-        # total time is edge processing + any necessary transmission + any waiting for cloud results
+        # --- Completion Time (seconds) ---
         completion_time_s = edge_total_time_s + max_transmission_time + actual_idle_time_s
+        # print(f"Layer {layer} | Edge Time: {edge_total_time_s*1000:.2f} ms | Transmission Time: {max_transmission_time*1000:.2f} ms | Idle Time: {actual_idle_time_s*1000:.2f} ms | Total Time: {completion_time_s*1000:.2f} ms | Energy: {total_energy:.4f} J, action: {current_action[:,1].tolist()}")
 
         return total_energy, completion_time_s
+
 
 
 
@@ -153,42 +184,48 @@ class CloudEdgeSimulator:
         # --- 3. Compute surplus in ms ---
         # Positive surplus => finished early
         # Negative surplus => exceeded local deadline
-        layer_surplus_ms = fractional_deadline_ms + previous_surplus - completion_time_ms
+        layer_surplus_ms = fractional_deadline_ms + (previous_surplus) - completion_time_ms
 
         # --- 4. λ (trade-off between energy and delay) ---
         if not isA2C:
-            lambda_param = 5.0
+            lambda_param_e = 5.0
+            lambda_param_d = 5.0
         else:
-            lambda_param = 1.0
+            lambda_param_e = 1
+            lambda_param_d = 1
         # --- 5. Penalties ---
         if layer_surplus_ms < 0:
-            delay_penalty = abs(layer_surplus_ms) * lambda_param
+            delay_penalty = abs(layer_surplus_ms) * lambda_param_d
         else:
             delay_penalty = 0.0
 
         # --- 6. Combine penalties smoothly ---
         # Normalize surplus to seconds scale for sigmoid stability
-        norm_surplus = layer_surplus_ms / 100.0  # scaling prevents overflow
+        norm_surplus = layer_surplus_ms / 1000.0  # scaling prevents overflow
         sigmoid_weight = 1 / (1 + np.exp(-norm_surplus))
 
-        energy_weight = lambda_param * sigmoid_weight
-        delay_weight = lambda_param * (1 - sigmoid_weight)
-        total_penalty = energy_weight * (total_energy * 100) + delay_weight * delay_penalty
+        # sigmoid_weight = round(sigmoid_weight, 2)
+
+        energy_weight = lambda_param_e * sigmoid_weight
+        delay_weight = lambda_param_d * (1 - sigmoid_weight)
+        total_penalty = (energy_weight * (total_energy * 100) )+ delay_weight * delay_penalty
 
         # --- 7. Reward computation ---
         reward = -total_penalty
 
         # --- 8. Local bonuses/penalties ---
-        if layer_surplus_ms > 0:
+        if layer_surplus_ms < 0:
+        #     if (not isA2C):
+        #         reward += (500 * (layer_surplus_ms / fractional_deadline_ms))
+        #     else:
+        #         reward += 0.5
+        # else:
             if (not isA2C):
-                reward += 5
+                reward -= 10 * abs(layer_surplus_ms / fractional_deadline_ms)
             else:
-                reward += 0.5
-        else:
-            if (not isA2C):
-                reward -= 15 * (abs(layer_surplus_ms) / fractional_deadline_ms)
-            else:
-                reward -= 0.75
+                reward -= 10000 * abs(layer_surplus_ms / fractional_deadline_ms)
+
+        # print(f"Layer {layer} | Energy: {total_energy:.4f} J | Time: {completion_time_ms:.2f} ms | Surplus: {layer_surplus_ms:.2f} ms | Reward: {reward:.2f}")
 
         # --- 9. Return ---
         return reward, layer_surplus_ms, negative_surplus_count, fractional_deadline_ms

@@ -12,6 +12,7 @@ class ProfilingData:
         edge_idle_power,
         deadline,
         edge_communication_power,
+        dependencies,
     ):
         self.numberOfEdgeDevice = numberOfEdgeDevice
         self.layers = layers
@@ -24,6 +25,7 @@ class ProfilingData:
         self.edge_idle_power = edge_idle_power
         self.deadline = deadline
         self.edge_communication_power = edge_communication_power
+        self.dependencies = dependencies
 
     def get_num_nodes(self, layer_idx):
         return len(self.layers[layer_idx])
@@ -79,3 +81,16 @@ class ProfilingData:
     
     def get_output_size(self, layer_idx, node_idx):
         return self.output_size.get((layer_idx, node_idx), 1.0)
+    
+    def get_max_layer_cloud_time(self, layer_idx):
+        max_time = 0.0
+        num_nodes = self.get_num_nodes(layer_idx)
+        for node_idx in range(num_nodes):
+            cloud_time = self.get_node_cloud_time(layer_idx, node_idx)
+            if cloud_time > max_time:
+                max_time = cloud_time
+        return max_time
+    
+    def get_input_size(self):
+        # Assuming input size is the output size of the first layer's first node
+        return self.get_output_size(0, 0)

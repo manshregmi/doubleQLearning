@@ -19,7 +19,7 @@ def flatten_state(state, max_layers, max_nodes):
     """
 
     # --- Discretization bins (same as A2C) ---
-    bandwidth_bins = np.linspace(1, 30, 6)      # Mbps
+    bandwidth_bins = np.linspace(1, 15, 6)      # Mbps
     cloudtime_bins = np.linspace(0, 100, 20)    # ms
     surplus_bins = np.linspace(-5, 5, 21)       # s
 
@@ -135,16 +135,38 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
             if discrete_action.size == 0:
                 terminal = True
                 next_state = current_state
-                reward, energy, completion_s = 0.0, 0.0, 0.0
+                reward, energy, completion_time_s = 0.0, 0.0, 0.0
             else:
-                next_state, terminal, cloud_pending = simulator.get_next_state(
-                    current_state, discrete_action, current_surplus, current_neg_count
-                )
-                energy, completion_s = simulator.compute_energy_and_time(current_state, discrete_action, cloud_pending)
-                reward, current_surplus, current_neg_count, _ = simulator.calculate_reward(
-                    current_state[2], energy, completion_s, current_surplus, current_neg_count, isA2C=True
+                # next_state, terminal, cloud_pending = simulator.get_next_state(
+                #     current_state, discrete_action, current_surplus, current_neg_count
+                # )
+                # energy, completion_s = simulator.compute_energy_and_time(current_state, discrete_action, cloud_pending)
+                # reward, current_surplus, current_neg_count, _ = simulator.calculate_reward(
+                #     current_state[2], energy, completion_s, current_surplus, current_neg_count, isA2C=True
+                # )
+                
+                next_state_cloud_processing = simulator.get_next_state_cloud_waiting_time(
+                    next_layer = (int(current_state[2])) if ((int(current_state[2]) + 1)  < len(simulator.profiling.layers)) else int(current_state[2]),
+                    current_action=discrete_action
                 )
 
+                # Simulator step(s)
+                energy, completion_time_s = simulator.compute_energy_and_time(
+                    current_state=current_state, current_action=discrete_action, cloud_pending_ms=next_state_cloud_processing
+                )
+
+                # Reward computation (simulator returns scaled reward)
+                reward, surplus, negative_surplus_count, fractional_deadline = simulator.calculate_reward(
+                    int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5], isA2C=False
+                )
+                surplus /= 1000.0  # convert to seconds
+
+                # Next state from simulator
+                next_state, terminal, _ = simulator.get_next_state(
+                    current_state, discrete_action, surplus, negative_surplus_count, new_cloud_pending=next_state_cloud_processing
+                )
+
+        
                 # Flatten action before storing in buffer
                 flat_action = flatten_action(discrete_action, max_nodes)
                 flat_next = flatten_state(next_state, max_layers, max_nodes)
@@ -156,7 +178,7 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
 
             total_reward += reward
             total_energy += energy
-            total_time += completion_s * 1000  # s -> ms
+            total_time += completion_time_s * 1000  # s -> ms
             current_state = next_state
 
             if terminal:
@@ -167,13 +189,21 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
         edge_energy_log.append(total_energy)
         completion_time_log.append(total_time)
 
+
+
+        E = np.array(edge_energy_log)
+        T = np.array(completion_time_log)
+
         # --- Print nicely per episode ---
         print(f"[Ep {ep}] Reward={total_reward:.2f}, Energy={total_energy:.2f}, Time={total_time:.2f} ms")
         # Save checkpoint
         try:
             agent.save_checkpoint(checkpoint_file)
-            print(f"[SAC] ✅ Checkpoint saved -> {checkpoint_file}")
+            # print(f"[SAC] ✅ Checkpoint saved -> {checkpoint_file}")
         except Exception as e:
             print(f"Failed to save checkpoint: {e}")
+
+    print(f"SAC Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}")
+    print(f"SAC Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}")        
 
     return np.mean(edge_energy_log), np.mean(completion_time_log)

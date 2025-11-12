@@ -3,39 +3,45 @@ from profiling.profile import ProfilingData
 import numpy as np
 
 def run_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=20):
-    agent = DoubleQLearningAgent(profiling_data)
+    agent = DoubleQLearningAgent(profiling_data, is_test=True)
     edge_energy = []
     completion_time = []
     rewards = []
-    bandwidth = profiling_data.bandwidth
-    cloud_time = 0.0
-    agent.load_qtables()
-    for ep in range(episodes):
-        total_edge_energy = 0.0
-        total_completion_time = 0.0
-        total_reward = 0.0
-        episode_surplus = 0.0
-        fractional_deadline = 0.0
-        current_state = (bandwidth, cloud_time, 0, None, 0, 0) # (bandwidth, cloud_time, layer, prev_action, surplus, negativesurpluscount)
 
-        for __ in range(max_steps):
-            _, reward, next_state, terminal, energy, completionTime, new_bandwidth, surplus, fractional_deadline = agent.train(current_state)
-            total_edge_energy += energy
-            total_completion_time += (completionTime * 1000)  # ms
+    agent.load_qtables()
+
+    for ep in range(episodes):
+        total_energy, total_time, total_reward = 0.0, 0.0, 0.0
+
+        # ✅ reset env state EVERY EPISODE
+        bandwidth = profiling_data.bandwidth
+        cloud_time = 0.0
+        current_state = (bandwidth, cloud_time, 0, None, 0, 0)
+
+        for step in range(max_steps):
+            _, reward, next_state, terminal, energy, completionTime, new_bandwidth, _, _ = agent.train(current_state)
+
+            total_energy += energy
+            total_time += (completionTime * 1000)  # ms
             total_reward += reward
-            episode_surplus += surplus
-            fractional_deadline += fractional_deadline
             current_state = next_state
             if terminal:
                 bandwidth = new_bandwidth
-                cloud_time = next_state[1]
                 break
-        print(f"[Ep {ep}] Reward={total_reward:.3f}, Energy={total_edge_energy:.3f}, Time={total_completion_time:.3f}, Surplus={episode_surplus:.3f}, deadline_frac={fractional_deadline:.3f}")
+
+            
+        edge_energy.append(total_energy)
+        completion_time.append(total_time)
         rewards.append(total_reward)
+        # print(f"Episode {ep}, Energy: {total_energy:.3f}, Time: {total_time:.3f}, Reward: {total_reward:.3f}")
+    try:
+        agent.save_qtables()
+    except Exception as e:
+        print(f"Error saving Q-tables: {e}")   
+    E = np.array(edge_energy)
+    T = np.array(completion_time)
 
-        edge_energy.append(total_edge_energy)
-        completion_time.append(total_completion_time)
-
-    agent.save_qtables()
-    return np.mean(edge_energy), np.mean(completion_time)
+    print(f"DQ Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, Lower Bound: {E.min():.3f} J, Upper Bound: {E.max():.3f} J , Lowest index: {np.argmin(E)}, Reward at that index: {rewards[np.argmin(E)]:.3f} time at that index: {T[np.argmin(E)]:.3f} ms")
+    print(f"DQ Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, Lower Bound: {T.min():.3f} ms, Upper Bound: {T.max():.3f} ms, Lowest index: {np.argmin(T)}, Reward at that index: {rewards[np.argmin(T)]:.3f} energy at that index: {E[np.argmin(T)]:.3f} J")
+    return E.mean(), T.mean()
 

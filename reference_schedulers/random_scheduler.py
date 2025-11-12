@@ -63,8 +63,29 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
 
         for step in range(max_steps):
             action = get_random_action(profiling_data, state[2]) if is_random else get_all_cloud_action(profiling_data, state[2]) if is_all_cloud else get_all_edge_action(profiling_data, state[2])   
-            next_state, terminal, cloud_time = simulator.get_next_state(state, action, 0, state[5], isAllCloud=True if is_all_cloud else False)
-            total_energy, completion_time = simulator.compute_energy_and_time(state, action, cloud_time)
+            next_state_cloud_processing = simulator.get_next_state_cloud_waiting_time(
+                next_layer = (int(state[2])) if ((int(state[2]) + 1)  < len(simulator.profiling.layers)) else int(state[2]),
+                current_action=action, isAllCloud=is_all_cloud
+            )
+
+            # Simulator step(s)
+            energy, completion_time_s = simulator.compute_energy_and_time(
+                current_state=state, current_action=action, cloud_pending_ms=next_state_cloud_processing
+            )
+
+            # Reward computation (simulator returns scaled reward)
+            reward, surplus, negative_surplus_count, fractional_deadline = simulator.calculate_reward(
+                int(state[2]), energy, completion_time_s, state[4], state[5], isA2C=False
+            )
+            surplus /= 1000.0  # convert to seconds
+
+            # Next state from simulator
+            next_state, terminal, _ = simulator.get_next_state(
+                state, action, surplus, negative_surplus_count, new_cloud_pending=next_state_cloud_processing
+            )
+            
+            
+            total_energy, completion_time = simulator.compute_energy_and_time(state, action, next_state_cloud_processing)
 
         # energy, completion_time = self.simulator.compute_energy_and_time(current_state=current_state, current_action=action, cloud_pending_ms= current_state[1])
         # reward, surplus, negative_surplus_count = self.simulator.calculate_reward(int(current_state[2]), energy, completion_time, current_state[4], current_state[5])

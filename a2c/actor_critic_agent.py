@@ -4,7 +4,7 @@ import random
 from simulator.simulator import CloudEdgeSimulator
 
 class A2CAgent:
-    def __init__(self, profiling_data, alpha_v=0.1, alpha_p=0.1, gamma=0.9, epsilon=0.075):
+    def __init__(self, profiling_data, alpha_v=0.02, alpha_p=0.02, gamma=0.95, epsilon=0.05):
         self.profiling = profiling_data
         self.alpha_v = alpha_v
         self.alpha_p = alpha_p
@@ -19,7 +19,7 @@ class A2CAgent:
 
         # --- Discretization bins ---
         # Bandwidth (Mbps)
-        self.bandwidth_bins = np.linspace(1, 30, 6)      # [1, ~6.8, ~12.6, ~18.4, ~24.2, 30]
+        self.bandwidth_bins = np.linspace(1, 15, 6)      # [1, ~4.8, ~8.6, ~12.4, ~16.2, 30]
         # Cloud pending time (ms)
         self.cloudtime_bins = np.linspace(0, 100, 20)    # step ≈5.26 ms
         # Surplus (s)
@@ -104,7 +104,7 @@ class A2CAgent:
 
 
     # ---------- CORE TRAIN FUNCTION ----------
-    def train(self, current_state):
+    def train(self, current_state, random_seed =0.0):
         state_key = self.state_to_key(current_state)
         layer = int(current_state[2])
         surplus = current_state[4]
@@ -112,17 +112,29 @@ class A2CAgent:
         # select action
         action = self.get_action(current_state)
 
-        # simulate
-        total_energy, completion_time_s = self.simulator.compute_energy_and_time(
-            current_state, action, current_state[1]
+
+        next_state_cloud_processing = self.simulator.get_next_state_cloud_waiting_time(
+            next_layer = (int(current_state[2])) if ((int(current_state[2]) + 1)  < len(self.profiling.layers)) else int(current_state[2]),
+            current_action=action
         )
-        reward, layer_surplus_ms, negative_surplus_count, fractional_deadline_ms = \
-            self.simulator.calculate_reward(layer, total_energy, completion_time_s, surplus, current_state[5], isA2C=True)
-        
-        # next state
+
+        # Simulator step(s)
+        energy, completion_time_s = self.simulator.compute_energy_and_time(
+            current_state=current_state, current_action=action, cloud_pending_ms=next_state_cloud_processing
+        )
+
+        # Reward computation (simulator returns scaled reward)
+        reward, surplus, negative_surplus_count, fractional_deadline = self.simulator.calculate_reward(
+            int(current_state[2]), energy, completion_time_s, current_state[4], current_state[5], isA2C=False
+        )
+        surplus /= 1000.0  # convert to seconds
+
+        # Next state from simulator
         next_state, terminal, _ = self.simulator.get_next_state(
-            current_state, action, layer_surplus_ms / 1000, negative_surplus_count
+            current_state, action, surplus, negative_surplus_count, new_cloud_pending=next_state_cloud_processing
         )
+
+        
 
         # critic update
         next_key = self.state_to_key(next_state)
@@ -143,19 +155,17 @@ class A2CAgent:
         probs /= np.sum(probs)
         self.policy_table[state_key] = probs
 
-        entropy = -np.sum(probs * np.log(probs + 1e-8))
-        print(f"[A2C] δ={delta:.4f}, Reward={reward:.4f}, Entropy={entropy:.4f}")
-
-        return action, reward, next_state, terminal, total_energy, completion_time_s
+        return action, reward, next_state, terminal, energy, completion_time_s
 
     # ---------- SAVE / LOAD ----------
     def save_tables(self):
         try:
             np.save(self.filename_value, self.value_table, allow_pickle=True)
             np.save(self.filename_policy, self.policy_table, allow_pickle=True)
-            print("Tables saved successfully.")
+            # print("Tables saved successfully.")
         except Exception as e:
-            print(f"Error saving tables: {e}")
+            print(f"Error saving A2C tables: {e}")
+            # print(f"Error saving tables: {e}")
 
     def load_tables(self):
         try:
