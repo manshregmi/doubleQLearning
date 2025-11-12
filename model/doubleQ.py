@@ -287,6 +287,9 @@ class DoubleQLearningAgent:
         """
         action_plan = self.choose_action_all(state)
 
+
+        print(f"Chosen full action plan: {[a[:,1].tolist() for a in action_plan]}")
+
         initial_bandwidth = state[0]
 
         # Run full simulation using this plan
@@ -295,9 +298,6 @@ class DoubleQLearningAgent:
         # Terminal since full task done
         terminal = True
         next_state = None
-
-        if self.is_test:
-            return action_plan, reward, next_state, terminal, total_energy, total_time
 
         # Double Q-learning update
         cur_key = (
@@ -315,7 +315,7 @@ class DoubleQLearningAgent:
         old_val = q_table.get(cur_key, 0.0)
         q_table[cur_key] = old_val + self.alpha * (target - old_val)
 
-        return action_plan, reward, next_state, terminal, total_energy, total_time, bandwidth
+        return reward, total_energy, total_time, bandwidth
             
 
     # ---------------------------

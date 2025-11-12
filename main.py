@@ -9,9 +9,9 @@ import numpy as np
 
 
 if __name__ == "__main__":
-    episodes = 50000
+    episodes = 1
     max_steps = 10
-    deadlines = list(range(300, 605, 3))  # 1ms to 700ms
+    deadlines = list(range(500, 505, 3))  # 1ms to 700ms
 
     dq_energy, dq_time, dq_r = [], [], []
     a2c_energy, a2c_time = [], []
@@ -24,7 +24,7 @@ if __name__ == "__main__":
         print("Running simulations for deadline: {} ms".format(d))
         profiling_data = get_profiling_data(d)
 
-        e, t, r = run_simulation_all(profiling_data, 10)
+        e, t, r = run_simulation_all(profiling_data, 1)
         dq_energy.append(e)
         dq_time.append(t)
 

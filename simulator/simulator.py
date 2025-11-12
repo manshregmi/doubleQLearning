@@ -177,11 +177,11 @@ class CloudEdgeSimulator:
         completion_time_s = edge_total_time_s + max_transmission_time + actual_idle_time_s
 
         # Optional debug print:
-        # print(f"Layer {layer} | Edge Time: {edge_total_time_s*1000:.2f} ms | "
-        #       f"Transmission: {max_transmission_time*1000:.2f} ms | "
-        #       f"Idle: {actual_idle_time_s*1000:.2f} ms | "
-        #       f"Total Time: {completion_time_s*1000:.2f} ms | Energy: {total_energy:.4f} J, "
-        #       f"action: {current_action.tolist()}")
+        print(f"Layer {layer} | Edge Time: {edge_total_time_s*1000:.2f} ms | "
+              f"Transmission: {max_transmission_time*1000:.2f} ms | "
+              f"Idle: {actual_idle_time_s*1000:.2f} ms | "
+              f"Total Time: {completion_time_s*1000:.2f} ms | Energy: {total_energy:.4f} J, "
+              f"action: {current_action.tolist()}")
 
         return total_energy, completion_time_s
 
