@@ -6,9 +6,9 @@ def get_profiling_data(deadline):
         [0],         # v1                level 0                    
         [0],        # v2                 level 1
         [0],        # v3                 level 2
-        [0],        # v4+ v7 +v10        level 3
+        [0,1,2],        # v4+ v7 +v10        level 3
         [0,1,2],    # v5 v8 v11          level 4
-        [0],         # v6+ v9 + v12      level 5    
+        [0,1,2],         # v6+ v9 + v12      level 5    
         [0],         # v13               level 6
     ]
     numberOfEdgeDevice = 8  
@@ -26,13 +26,13 @@ def get_profiling_data(deadline):
         (2, 0): 5, #v3
 
         # Level 3 
-        (3, 0): 23,  # max of v4,v7,v10
+        (3, 0): 15.8, (3,1):23 , (3,2) : 22.6,   # v4,v7,v10
 
         # level 4
         (4, 0): 18.5, (4, 1): 105.1, (4, 2): 88.2,  # v5,v8,v11
 
         # level 5
-        (5,0): 0.4, #max of v6 , v9 , v12
+        (5,0): 0.4, (5,1): 0.4, (5,2): 0.4, #max of v6 , v9 , v12
 
         # level 6
         (6,0): 0.1, #v13
@@ -53,12 +53,12 @@ def get_profiling_data(deadline):
         (2, 0): 2.1, #v3
 
         # Level 3 
-        (3, 0): 4.6,  # max of v4,v7,v10
+        (3, 0): 4.6, (3,1): 3.5, (3,2): 2.6,  #  v4,v7,v10
 
-        # level 4 (similar to node 4)
+        # level 4 
         (4, 0): 5.5, (4, 1): 7.0, (4, 2): 7.0,  # v5,v8,v11
 
-        (5,0): 0.2,     #max of v6 , v9 , v12
+        (5,0): 0.2,  (5,1): 0.1, (5,2): 0.1,  # v6 , v9 , v12
 
         (6,0): 0.1,     #v13
     }
@@ -77,12 +77,12 @@ def get_profiling_data(deadline):
         (2, 0): 4.96, #v3
 
         # Level 3 
-        (3, 0): 5.45,  # max of v4,v7,v10
+        (3, 0): 5.1, (3,1): 5.45, (3,2): 5.13,  # v4,v7,v10
 
         # level 4 (similar to node 4)
         (4, 0): 8.13, (4, 1): 8.26, (4, 2): 8.26,  # v5,v8,v11
 
-        (5,0): 5.11,     #max of v6 , v9 , v12
+        (5,0): 5.11, (5,1) : 5.07, (5,2): 5.05,   #v6 , v9 , v12
 
         (6,0): 0.1,     #v13
     }
@@ -91,10 +91,26 @@ def get_profiling_data(deadline):
         (0,0): 8100,
         (1,0): 3072,
         (2,0): 1275,
-        (3,0): 192, # max of v4,v7,v10
+        (3,0): 26.44, (3,1): 192, (3,2): 108, #  v4,v7,v10
         (4,0): 26.44, (4,1): 192, (4,2): 108,
-        (5,0): 3.72, # max of v6 , v9 , v12
+        (5,0): 3.72, (5,1): 1, (5,2): 1, # v6 , v9 , v12
         (6,0): 0
+    }
+
+    dependencies = {
+        (0,0): [],
+        (1,0): [ (0,0) ],
+        (2,0): [ (1,0) ],
+        (3,0): [ (2,0) ],
+        (3,1): [ (2,0) ],
+        (3,2): [ (2,0) ],
+        (4,0): [ (3,0) ],
+        (4,1): [ (3,1) ],
+        (4,2): [ (3,2) ],
+        (5,0): [ (4,0) ],
+        (5,1): [ (4,1) ],
+        (5,2): [ (4,2) ],
+        (6,0): [ (5,0), (5,1), (5,2)],
     }
 
 
@@ -103,13 +119,14 @@ def get_profiling_data(deadline):
         layers=layers,
         node_edge_times=node_edge_times,
         node_cloud_times=node_cloud_times,
-        bandwidth=6,
+        bandwidth=8,
         rtt=4.5,
         output_size=output_size,
         node_edge_powers=node_edge_powers,
         edge_idle_power=4.24,
         deadline=deadline,
         edge_communication_power=5.94,
+        dependencies=dependencies,
     )
     return profiling_data
 

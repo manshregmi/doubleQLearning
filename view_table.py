@@ -75,12 +75,12 @@ if __name__ == "__main__":
     print_table_content(
         filename=FILENAME_VALUE, 
         table_name="CRITIC'S VALUE TABLE ($V(s)$)", 
-        limit=5 # Only print the first 5 entries
+        limit=10 # Only print the first 5 entries
     )
     
     # Load and print the Actor's Policy Table
     print_table_content(
         filename=FILENAME_POLICY, 
         table_name="ACTOR'S POLICY TABLE ($\pi(a|s)$)", 
-        limit=15 # Only print the first 5 entries
+        limit=15 # Only print the first 15 entries
     )

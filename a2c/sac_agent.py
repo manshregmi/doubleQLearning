@@ -101,7 +101,7 @@ class SACAgent:
         max_action=1.0,
         gamma=0.95,
         tau=0.005,
-        alpha=0.1,
+        alpha=0.02,
         buffer_capacity=100000,
         batch_size=64,
         device=None,
@@ -131,7 +131,7 @@ class SACAgent:
         self.critic2_optimizer = optim.Adam(self.critic2.parameters(), lr=3e-4)
 
     # ---------------------------
-    def select_action(self, state, layer, simulator, epsilon=0.075, evaluate=False):
+    def select_action(self, state, layer, simulator, epsilon=0.05, evaluate=False):
         """
         Returns a discrete action matrix for a given layer using SAC output.
 
@@ -257,7 +257,7 @@ class SACAgent:
                 "alpha": self.alpha,
             }
             torch.save(checkpoint, filename)
-            print(f"[SAC] ✅ Checkpoint saved -> {filename}")
+            # print(f"[SAC] ✅ Checkpoint saved -> {filename}")
         except Exception as e:
             print(f"[SAC] ⚠️ Failed to save checkpoint: {e}")
 

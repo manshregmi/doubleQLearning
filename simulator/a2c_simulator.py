@@ -43,7 +43,7 @@ def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=
         total_completion_time = 0.0
         
         # Initial state: (bandwidth, cloud_time, layer, prev_action, surplus, negative_surplus_count)
-        current_state_tuple = State(bandwidth, cloud_time, 0, None, 0.0, 0)
+        current_state_tuple = State(bandwidth, 0, 0, None, 0.0, 0)
 
         for _ in range(max_steps):
             # 3. Step and Train (A2C is on-policy)
@@ -60,24 +60,22 @@ def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=
             current_state_tuple = next_state_tuple
 
             if terminal:
-                # Update environment starting parameters for the next episode
-                # FIX: Use positional indexing [0] and [1] instead of named attributes 
-                # (e.g., .bandwidth) to handle cases where next_state_tuple might 
-                # be returned as a generic tuple from agent.train, causing the AttributeError.
                 bandwidth = next_state_tuple[0]  
-                cloud_time = next_state_tuple[1] 
                 break
-
-        # 5. Logging and Metrics
+        try:
+            agent.save_tables()
+        except Exception as e:
+            print(f"Error saving A2C tables at episode {ep}: {e}")
+        print(f"Episode {ep}, Energy: {total_edge_energy:.3f}, Time: {total_completion_time:.3f}, Reward: {total_reward:.3f}")
+        
+        # ✅ store episode stats
         edge_energy.append(total_edge_energy)
         completion_time.append(total_completion_time)
         rewards.append(total_reward)
 
-        if ep % 100 == 0:
-            avg_reward_100 = np.mean(rewards[-100:]) if len(rewards) >= 100 else total_reward
-            print(f"[Ep {ep:05d}] Avg Reward (100): {avg_reward_100:.3f} | Total Time: {total_completion_time:.3f} ms")
+    E = np.array(edge_energy)
+    T = np.array(completion_time)
 
-    # 6. Save final tables
-    agent.save_tables()
-
-    return np.mean(edge_energy), np.mean(completion_time)
+    print(f"A2C Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}")
+    print(f"A2C Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}")
+    return E.mean(), T.mean()
