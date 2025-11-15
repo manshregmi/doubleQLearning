@@ -54,7 +54,7 @@ def run_simulation_all(profiling_data: ProfilingData, episodes=10000):
     The agent predicts one full assignment plan,
     simulator executes it, and we get a single reward for the task.
     """
-    agent = DoubleQLearningAgent(profiling_data, is_test=True)
+    agent = DoubleQLearningAgent(profiling_data, is_test=False)
     agent.load_qtables()
 
     all_energies = []
@@ -79,6 +79,8 @@ def run_simulation_all(profiling_data: ProfilingData, episodes=10000):
         all_energies.append(total_energy)
         all_times.append(total_time)
         all_rewards.append(reward)
+        # if (ep + 1) % 1000 == 0:
+        print(f"Episode {ep}, Energy: {total_energy:.3f}, Time: {total_time:.3f}, Reward: {reward:.3f}")
 
     # Save Q-tables after training
     try:
@@ -90,20 +92,6 @@ def run_simulation_all(profiling_data: ProfilingData, episodes=10000):
     T = np.array(all_times)
     R = np.array(all_rewards)
 
-    print("\n=== Simulation Summary ===")
-    print(
-        f"Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, "
-        f"Min: {E.min():.3f} J, Max: {E.max():.3f}, "
-        f"Best Ep (min energy): {np.argmin(E)}"
-    )
-    print(
-        f"Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, "
-        f"Min: {T.min():.3f} ms, Max: {T.max():.3f}, "
-        f"Best Ep (min time): {np.argmin(T)}"
-    )
-    print(
-        f"Avg Reward: {R.mean():.3f}, Max: {R.max():.3f}, "
-        f"At Ep {np.argmax(R)}"
-    )
-
+    print(f"DQ Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, Lower Bound: {E.min():.3f} J, Upper Bound: {E.max():.3f} J , Lowest index: {np.argmin(E)}, Reward at that index: {R[np.argmin(E)]:.3f} time at that index: {T[np.argmin(E)]:.3f} ms")
+    print(f"DQ Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, Lower Bound: {T.min():.3f} ms, Upper Bound: {T.max():.3f} ms, Lowest index: {np.argmin(T)}, Reward at that index: {R[np.argmin(T)]:.3f} energy at that index: {E[np.argmin(T)]:.3f} J")
     return E.mean(), T.mean(), R.mean()
