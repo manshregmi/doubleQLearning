@@ -21,7 +21,7 @@ def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=
     and policy/value updates in a single step for on-policy learning.
     """
     # 1. Initialization
-    agent = A2CAgent(profiling_data)
+    agent = A2CAgent(profiling_data, is_test=True)
     # The simulator object is initialized here, but the agent's internal 
     # 'train' method is responsible for using it for interaction.
     
@@ -68,6 +68,8 @@ def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=
         completion_time.append(total_completion_time)
         rewards.append(total_reward)
         # print(f"Episode {ep}, Energy: {total_edge_energy:.3f}, Time: {total_completion_time:.3f}, Reward: {total_reward:.3f}")
+        if (ep + 1) % 1000 == 0:
+            print(f"Episode {ep}, Energy: {total_edge_energy:.3f}, Time: {total_completion_time:.3f}, Reward: {total_reward:.3f}")
 
 
     E = np.array(edge_energy)
@@ -79,6 +81,6 @@ def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=
         print(f"Error saving A2C tables at episode {ep}: {e}")
         
 
-    print(f"A2C Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f} , average reward: {np.mean(rewards):.3f}")
-    print(f"A2C Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}")
+    print(f"A2C Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, Lower Bound: {E.min():.3f} J, Upper Bound: {E.max():.3f} J , Lowest index: {np.argmin(E)}, Reward at that index: {rewards[np.argmin(E)]:.3f} time at that index: {T[np.argmin(E)]:.3f} ms")
+    print(f"A2C Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, Lower Bound: {T.min():.3f} ms, Upper Bound: {T.max():.3f} ms, Lowest index: {np.argmin(T)}, Reward at that index: {rewards[np.argmin(T)]:.3f} energy at that index: {E[np.argmin(T)]:.3f} J")
     return E.mean(), T.mean()

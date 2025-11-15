@@ -1,3 +1,6 @@
+import numpy as np
+
+
 class ProfilingData:
     def __init__(
         self,
@@ -94,3 +97,14 @@ class ProfilingData:
     def get_input_size(self):
         # Assuming input size is the output size of the first layer's first node
         return self.get_output_size(0, 0)
+    
+    def get_optimum_action_array(self):
+        return [
+            np.array([[0, 0]]),
+            np.array([[1, 1]]),
+            np.array([[2, 1]]),
+            np.array([[3, 1], [3, 1], [3, 1]]),
+            np.array([[4, 1], [4, 1], [4, 1]]),
+            np.array([[5, 1], [5, 1], [5, 1]]),
+            np.array([[6, 0]])
+        ]
