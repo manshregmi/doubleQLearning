@@ -187,57 +187,64 @@ class CloudEdgeSimulator:
 
 
 
+    def sigmoid(self,x, k=5):
+        """
+        Standard sigmoid, steeper at higher k (>0).
+        Output approaches 1 for large positive x, 0 for large negative x.
+        """
+        return 1 / (1 + np.exp(-k * x))
+
     def calculate_reward(
         self,
         layer,
-        total_energy,
-        completion_time_s,
-        previous_surplus,
-        negative_surplus_count,
+        total_energy,   # in Joules
+        completion_time_s,  # in seconds
+        previous_surplus,   # in ms
+        negative_surplus_count, # unused, placeholder for future custom penalties
         isA2C=False,
     ):
-        """
-        Reward = High when energy is low and completion is within the fractional deadline.
-        If isA2C=True, the raw (negative) reward is normalized into [0, 10].
-        """
-
+        # Compute per-layer allowed time (ms), based on profiling fractions
         fractional_deadline_ms = (
             self.profiling.get_edge_time_for_layer(layer)
             / self.profiling.get_total_edge_time()
         ) * self.profiling.deadline
 
         completion_time_ms = completion_time_s * 1000.0
-        layer_surplus_ms = fractional_deadline_ms + previous_surplus - completion_time_ms
 
-        lambda_param_e = 5.0
-        lambda_param_d = 5.0
+        surplus_ms = fractional_deadline_ms + previous_surplus - completion_time_ms
 
-        if layer_surplus_ms < 0:
-            delay_penalty = abs(layer_surplus_ms) * lambda_param_d
-        else:
-            delay_penalty = 0.0
+        completion_time_ms = completion_time_ms + surplus_ms
 
-        norm_surplus = layer_surplus_ms / 1000.0
-        sigmoid_weight = 1 / (1 + np.exp(-norm_surplus))
+        missed_deadline = completion_time_ms > fractional_deadline_ms
 
-        energy_weight = lambda_param_e * sigmoid_weight
-        delay_weight = lambda_param_d * (1 - sigmoid_weight)
+        sigmoid_wight = self.sigmoid(surplus_ms/1000, k=1)
 
-        total_penalty = (
-            energy_weight * ((total_energy * 100) if not isA2C else total_energy)
-            + delay_weight * delay_penalty
-        )
+        reward = 0
+        if (missed_deadline):
+            negative_surplus_count +=1
+        
+        reward = ((sigmoid_wight * total_energy*1000) + ((1-sigmoid_wight)*abs(completion_time_ms)))
+        if (negative_surplus_count > 1):
+            reward += negative_surplus_count * abs(completion_time_ms)
 
-        reward = -total_penalty  # <-- still negative = cost to minimize
+        reward *= -1
 
-        if layer_surplus_ms < 0:
-            reward -= 10000 * abs(layer_surplus_ms / fractional_deadline_ms)
-
-        if isA2C:
-            reward = 10 * np.tanh(reward / 1000.0)
-
-        return reward, layer_surplus_ms, negative_surplus_count, fractional_deadline_ms
+        return reward, surplus_ms, negative_surplus_count, fractional_deadline_ms
     
+
+    def compute_whole_action_reward(self, total_energy, total_completion_time):
+        deadline = self.profiling.deadline
+
+        missed_deadline = total_completion_time > deadline
+
+        if missed_deadline:
+            return -total_completion_time*10000
+        
+        return -total_energy*1000
+
+
+
+
     def run_full_task(self, action_plan, initial_bandwidth):
         """
         Execute a full DNN task given a complete assignment plan (list of per-layer actions).
@@ -290,10 +297,9 @@ class CloudEdgeSimulator:
             total_time_ms += completion_time_s * 1000  # convert s → ms
 
             # Compute layer-level reward components (surplus etc.)
-            reward, surplus, __, _ = self.calculate_reward(
+            _, surplus, __, _ = self.calculate_reward(
                 layer_idx, energy, completion_time_s, surplus, negative_surplus_count, isA2C=False
             )
-            total_reward += reward
 
             # Compute next state (for continuity)
             next_state, terminal, _ = self.get_next_state(
@@ -309,13 +315,10 @@ class CloudEdgeSimulator:
 
             if terminal:
                 break
+        
+        total_reward = self.compute_whole_action_reward(total_energy=total_energy, total_completion_time=total_time_ms)                
 
-        # # Final reward for full task — use total energy/time
-        # total_reward, _, _, _ = self.calculate_reward(
-        #     len(action_plan) - 1, total_energy, total_time_ms , surplus, negative_surplus_count, isA2C=False
-        # )
-
-        # print(f"Full Task | Total Energy: {total_energy:.4f} J | Total Time: {total_time_ms:.2f} ms | Total Reward: {total_reward:.3f}")
+        print(f"Full Task | Total Energy: {total_energy:.4f} J | Total Time: {total_time_ms:.2f} ms | Total Reward: {total_reward:.3f}")
 
         return total_energy, total_time_ms, total_reward, bandwidth
 
