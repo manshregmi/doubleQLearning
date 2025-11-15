@@ -81,7 +81,6 @@ class Critic(nn.Module):
         )
 
     def forward(self, state, action):
-        # Flatten inputs to [batch, feature]
         if state.dim() > 2:
             state = state.view(state.size(0), -1)
         if action.dim() > 2:
@@ -91,7 +90,7 @@ class Critic(nn.Module):
 
 
 # ===============================
-# SAC Agent
+# SAC Agent (Modified for Test Mode)
 # ===============================
 class SACAgent:
     def __init__(
@@ -105,6 +104,7 @@ class SACAgent:
         buffer_capacity=100000,
         batch_size=64,
         device=None,
+        is_test=False,  # ✅ Added flag
     ):
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
         self.gamma = gamma
@@ -112,6 +112,7 @@ class SACAgent:
         self.alpha = alpha
         self.batch_size = batch_size
         self.max_action = max_action
+        self.is_test = is_test  # ✅ store flag
 
         # Actor and Critics
         self.actor = Actor(state_dim, action_dim, max_action).to(self.device)
@@ -122,7 +123,7 @@ class SACAgent:
         self.target_critic1.load_state_dict(self.critic1.state_dict())
         self.target_critic2.load_state_dict(self.critic2.state_dict())
 
-        # Replay Buffer
+        # Replay Buffer (disabled for testing)
         self.replay_buffer = ReplayBuffer(capacity=buffer_capacity)
 
         # Optimizers
@@ -131,61 +132,52 @@ class SACAgent:
         self.critic2_optimizer = optim.Adam(self.critic2.parameters(), lr=3e-4)
 
     # ---------------------------
-    def select_action(self, state, layer, simulator, epsilon=0.05, evaluate=False):
+    def select_action(self, state, layer, simulator, epsilon=0.2, evaluate=False):
         """
         Returns a discrete action matrix for a given layer using SAC output.
-
-        Args:
-            state (np.array): Flattened state for the actor network.
-            layer (int): Current layer index.
-            simulator (CloudEdgeSimulator): To generate valid actions.
-            epsilon (float): Random action probability.
-            evaluate (bool): If True, use deterministic action.
-
-        Returns:
-            np.ndarray: Discrete action matrix (num_nodes, 2)
+        In test mode, actions are fully deterministic (no noise or randomness).
         """
         nodes = simulator.profiling.get_num_nodes(layer)
 
-        # last layer -> edge only
+        # ✅ last layer -> edge only
         if layer == len(simulator.profiling.layers) - 1:
             a = np.zeros((nodes, 2), dtype=int)
             a[:, 0] = layer
             a[:, 1] = 0
             return a
 
-        # 2. SAC continuous action
         state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
 
-        if evaluate:
-            mean, _ = self.actor.forward(state_tensor)
-            cont_action = torch.tanh(mean).detach().cpu().numpy().flatten()
+        # ✅ Deterministic if test mode or evaluate=True
+        if self.is_test or evaluate:
+            with torch.no_grad():
+                mean, _ = self.actor.forward(state_tensor)
+                cont_action = torch.tanh(mean).cpu().numpy().flatten()
         else:
+            # Stochastic + exploration during training
             cont_action, _ = self.actor.sample(state_tensor)
             cont_action = cont_action.detach().cpu().numpy().flatten()
-            # Add small Gaussian noise for exploration
             cont_action += np.random.normal(0, 0.1, size=cont_action.shape)
             cont_action = np.clip(cont_action, -1.0, 1.0)
 
-        # 3. Get all possible discrete actions for this layer
         all_actions = simulator.get_possible_actions(layer)
         if len(all_actions) == 0:
-            return np.array([])  # terminal
+            return np.array([])
 
-        # 4. Epsilon-greedy: sometimes pick a completely random action
-        if np.random.rand() < epsilon:
+        # ✅ Skip epsilon randomness if test mode
+        if not self.is_test and np.random.rand() < epsilon:
             return random.choice(all_actions)
 
-        # 5. Map first continuous value to discrete index
         normalized_action = (cont_action[0] + 1) / 2.0  # [-1,1] -> [0,1]
         idx = int(np.clip(normalized_action * len(all_actions), 0, len(all_actions) - 1))
-
         return all_actions[idx]
-
-
 
     # ---------------------------
     def update_parameters(self):
+        """Train SAC parameters (disabled entirely in test mode)."""
+        if self.is_test:
+            return  # ✅ Skip learning during testing
+
         if len(self.replay_buffer) < self.batch_size:
             return
 
@@ -240,9 +232,8 @@ class SACAgent:
 
         for target_param, param in zip(self.target_critic2.parameters(), self.critic2.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
-    
-    # ===============================
 
+    # ---------------------------
     def save_checkpoint(self, filename="sac_checkpoint.pth"):
         try:
             checkpoint = {
@@ -257,7 +248,6 @@ class SACAgent:
                 "alpha": self.alpha,
             }
             torch.save(checkpoint, filename)
-            # print(f"[SAC] ✅ Checkpoint saved -> {filename}")
         except Exception as e:
             print(f"[SAC] ⚠️ Failed to save checkpoint: {e}")
 

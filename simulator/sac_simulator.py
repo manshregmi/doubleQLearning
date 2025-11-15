@@ -105,7 +105,7 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
 
     state_dim = 6
     action_dim = max_nodes  # fixed-size flattened action vector
-    agent = SACAgent(state_dim=state_dim, action_dim=action_dim)
+    agent = SACAgent(state_dim=state_dim, action_dim=action_dim, is_test=False)
 
     checkpoint_file = 'sac_checkpoint.pth'
     try:
@@ -195,7 +195,8 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
         T = np.array(completion_time_log)
 
         # --- Print nicely per episode ---
-        print(f"[Ep {ep}] Reward={total_reward:.2f}, Energy={total_energy:.2f}, Time={total_time:.2f} ms")
+        if (ep + 1) % 1000 == 0:
+            print(f"Episode {ep}, Energy: {total_energy:.3f}, Time: {total_time:.3f}, Reward: {total_reward:.3f}")
         # Save checkpoint
     try:
         agent.save_checkpoint(checkpoint_file)
@@ -203,7 +204,10 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
     except Exception as e:
         print(f"Failed to save checkpoint: {e}")
 
-    print(f"SAC Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, average reward: {np.mean(edge_energy_log):.3f}")
-    print(f"SAC Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}")        
 
-    return np.mean(edge_energy_log), np.mean(completion_time_log)
+    E = np.array(edge_energy_log)
+    T = np.array(completion_time_log)
+    print(f"SAC Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, Lower Bound: {E.min():.3f} J, Upper Bound: {E.max():.3f} J , Lowest index: {np.argmin(E)} time at that index: {T[np.argmin(E)]:.3f} ms")
+    print(f"SAC Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, Lower Bound: {T.min():.3f} ms, Upper Bound: {T.max():.3f} ms, Lowest index: {np.argmin(T)} energy at that index: {E[np.argmin(T)]:.3f} J")      
+
+    return np.mean(E), np.mean(T)

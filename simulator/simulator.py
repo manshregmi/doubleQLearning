@@ -31,8 +31,8 @@ class CloudEdgeSimulator:
 
         # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(current_action[:, 1] == 1)[0]
-        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0, 0.5))
-        # congestion = 0.0
+        # congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0.1,1))
+        congestion = 0.0
         new_cloud_pending = 0.0
         new_cloud_pending += congestion
 
@@ -63,8 +63,8 @@ class CloudEdgeSimulator:
 
         
         # Bandwidth update (stochastic)
-        bw_change = np.random.normal(-0.5, 0.5)
-        # bw_change = 0
+        # bw_change = np.random.normal(-0.5, 0.5)
+        bw_change = 0
         new_bandwidth = max(1.0, min(bandwidth + bw_change, 15.0))
 
         # Next layer / terminal flag
@@ -100,11 +100,12 @@ class CloudEdgeSimulator:
 
                     # Transmission only if parent and child are on different locations
                     if parent_loc != curr_loc:
-                        output_size = profiling.get_output_size(p_layer, p_node)
+                        output_size = profiling.get_output_size(layer, curr_node)
                         transmission_time = max(
                             (output_size / 1024.0) / max(bandwidth, 1e-6),
                             profiling.rtt / 1000.0
                         )
+                        # print("bandwidth:", bandwidth, "output size:", output_size, "transmission time (s):", transmission_time)
                         transmission_times.append(transmission_time)
 
         else:
@@ -155,55 +156,48 @@ class CloudEdgeSimulator:
 
 
 
+    def sigmoid(self,x, k=5):
+        """
+        Standard sigmoid, steeper at higher k (>0).
+        Output approaches 1 for large positive x, 0 for large negative x.
+        """
+        return 1 / (1 + np.exp(-k * x))
 
     def calculate_reward(
         self,
         layer,
-        total_energy,
-        completion_time_s,
-        previous_surplus,
-        negative_surplus_count,
+        total_energy,   # in Joules
+        completion_time_s,  # in seconds
+        previous_surplus,   # in ms
+        negative_surplus_count, # unused, placeholder for future custom penalties
         isA2C=False,
     ):
-        """
-        Reward = High when energy is low and completion is within the fractional deadline.
-        If isA2C=True, the raw (negative) reward is normalized into [0, 10].
-        """
-
+        # Compute per-layer allowed time (ms), based on profiling fractions
         fractional_deadline_ms = (
             self.profiling.get_edge_time_for_layer(layer)
             / self.profiling.get_total_edge_time()
         ) * self.profiling.deadline
 
         completion_time_ms = completion_time_s * 1000.0
-        layer_surplus_ms = fractional_deadline_ms + previous_surplus - completion_time_ms
 
-        lambda_param_e = 5.0
-        lambda_param_d = 5.0
+        surplus_ms = fractional_deadline_ms + previous_surplus - completion_time_ms
 
-        if layer_surplus_ms < 0:
-            delay_penalty = abs(layer_surplus_ms) * lambda_param_d
-        else:
-            delay_penalty = 0.0
+        completion_time_ms = completion_time_ms + surplus_ms
 
-        norm_surplus = layer_surplus_ms / 1000.0
-        sigmoid_weight = 1 / (1 + np.exp(-norm_surplus))
+        missed_deadline = completion_time_ms > fractional_deadline_ms
 
-        energy_weight = lambda_param_e * sigmoid_weight
-        delay_weight = lambda_param_d * (1 - sigmoid_weight)
+        sigmoid_wight = self.sigmoid(surplus_ms/1000, k=1)
 
-        total_penalty = (
-            energy_weight * ((total_energy * 100) if not isA2C else total_energy)
-            + delay_weight * delay_penalty
-        )
+        reward = 0
+        if (missed_deadline):
+            negative_surplus_count +=1
+        
+        reward = ((sigmoid_wight * total_energy*1000) + ((1-sigmoid_wight)*abs(completion_time_ms)))
+        if (negative_surplus_count > 1):
+            reward += negative_surplus_count * abs(completion_time_ms)
 
-        reward = -total_penalty  # <-- still negative = cost to minimize
+        reward *= -1
 
-        if layer_surplus_ms < 0:
-            reward -= 10000 * abs(layer_surplus_ms / fractional_deadline_ms)
+        return reward, surplus_ms, negative_surplus_count, fractional_deadline_ms
 
-        if isA2C:
-            reward = 10 * np.tanh(reward / 100000.0)
-
-        return reward, layer_surplus_ms, negative_surplus_count, fractional_deadline_ms
 
