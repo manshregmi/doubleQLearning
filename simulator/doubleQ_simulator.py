@@ -61,26 +61,28 @@ def run_simulation_all(profiling_data: ProfilingData, episodes=10000):
     all_times = []
     all_rewards = []
     bandwidth = profiling_data.bandwidth
+    cloud_time = 0
+
 
 
     for ep in range(episodes):
         # Each episode starts from the same initial state (no progression)
-        cloud_time = np.random.uniform(10, 50)
         surplus = 0.0
         neg_count = 0
         prev_action = None
 
         # The "state" represents the global condition before the task starts
-        current_state = (bandwidth, cloud_time, 0, prev_action, surplus, neg_count)
+        current_state = (bandwidth, cloud_time)
 
         # Perform one training step (predict whole plan + update Q-tables)
-        reward, total_energy, total_time, bandwidth = agent.train_all(current_state)
+        reward, total_energy, total_time, bandwidth, cloud_time = agent.train_all(current_state)
+        # print('cloud waiting', cloud_time)
 
         all_energies.append(total_energy)
         all_times.append(total_time)
         all_rewards.append(reward)
-        # if (ep + 1) % 1000 == 0:
-        print(f"Episode {ep}, Energy: {total_energy:.3f}, Time: {total_time:.3f}, Reward: {reward:.3f}")
+        if (ep + 1) % 1000 == 0:
+            print(f"Episode {ep}, Energy: {total_energy:.3f}, Time: {total_time:.3f}, Reward: {reward:.3f}")
 
     # Save Q-tables after training
     try:
