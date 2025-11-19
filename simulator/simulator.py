@@ -31,8 +31,8 @@ class CloudEdgeSimulator:
 
         # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(current_action[:, 1] == 1)[0]
-        # congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0.1,1))
-        congestion = 0.0
+        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0,1))
+        # congestion = 0.0
         new_cloud_pending = 0.0
         new_cloud_pending += congestion
 
@@ -63,8 +63,8 @@ class CloudEdgeSimulator:
 
         
         # Bandwidth update (stochastic)
-        # bw_change = np.random.normal(-0.5, 0.5)
-        bw_change = 0
+        bw_change = np.random.normal(-0.25, 1)
+        # bw_change = 0
         new_bandwidth = max(1.0, min(bandwidth + bw_change, 15.0))
 
         # Next layer / terminal flag
@@ -202,23 +202,21 @@ class CloudEdgeSimulator:
 
 
     def compute_whole_action_reward(self, total_energy, total_completion_time):
-        deadline = self.profiling.deadline
+        # print(total_completion_time)
 
-        total_completion_time = total_completion_time*1000
+        completion_time_ms = total_completion_time * 1000.0
 
-        missed_deadline = total_completion_time > deadline
+        missed_deadline = completion_time_ms > self.profiling.deadline
 
-        delta_t = (total_completion_time - deadline)/1000
+        surplus_ms = self.profiling.deadline = completion_time_ms
 
-
-        sigmoid = self.sigmoid(delta_t)
+        sigmoid_wight = self.sigmoid(surplus_ms/1000, k=1)
 
         reward = 0
+        reward = ((sigmoid_wight * total_energy*1000) + ((1-sigmoid_wight)*abs(completion_time_ms)))
+        if (missed_deadline):
+            reward +=  abs(completion_time_ms)
 
-        reward = ((sigmoid * total_energy*1000) + ((1-sigmoid)*total_completion_time))
         reward *= -1
-        if missed_deadline:
-            reward -= total_completion_time*10000
 
-        
         return reward

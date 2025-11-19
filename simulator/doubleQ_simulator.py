@@ -54,7 +54,7 @@ def run_simulation_all(profiling_data: ProfilingData, episodes=10000):
     The agent predicts one full assignment plan,
     simulator executes it, and we get a single reward for the task.
     """
-    agent = DoubleQLearningAgent(profiling_data, is_test=False)
+    agent = DoubleQLearningAgent(profiling_data, is_test=True)
     agent.load_qtables()
 
     all_energies = []
@@ -66,12 +66,7 @@ def run_simulation_all(profiling_data: ProfilingData, episodes=10000):
 
 
     for ep in range(episodes):
-        # Each episode starts from the same initial state (no progression)
-        surplus = 0.0
-        neg_count = 0
-        prev_action = None
 
-        # The "state" represents the global condition before the task starts
         current_state = (bandwidth, cloud_time)
 
         # Perform one training step (predict whole plan + update Q-tables)

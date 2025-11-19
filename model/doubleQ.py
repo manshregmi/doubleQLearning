@@ -29,9 +29,9 @@ class DoubleQLearningAgent:
         self.simulator = CloudEdgeSimulator(profiling_data)
 
         # Discretization
-        self.bandwidth_bins = np.linspace(1, 15, 6)
+        self.bandwidth_bins = np.linspace(1, 15, 15)
         self.cloudtime_bins = np.linspace(0, 100, 20)
-        self.surplus_bins = np.linspace(-300, 300, 100)
+        self.surplus_bins = np.linspace(-25, 25, 25)
 
         # Visit counts & exploration bonus
         self.visit_counts = {}
@@ -41,7 +41,7 @@ class DoubleQLearningAgent:
         self.epsilon_min = 0.05
         self.epsilon_decay = 0.9995
         self.epsilon_boost = 0.6
-        self.stagnant_limit = 200
+        self.stagnant_limit = 2000
 
         self.best_episode_reward = -1e9
         self.episodes_since_improvement = 0
@@ -203,6 +203,7 @@ class DoubleQLearningAgent:
             next_state, terminal, _ = self.simulator.get_next_state(
                 current_state, action, 0, 0, new_cloud_pending=next_wait
             )
+            bandwidth = next_state[0]
             total_cloud_pending += next_wait
 
             if terminal:
