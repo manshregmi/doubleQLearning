@@ -56,7 +56,7 @@ class DoubleQLearningAgent:
         # --- Discretization bins (same defaults you had) ---
         self.bandwidth_bins = np.linspace(1, 15, 15)
         self.cloudtime_bins = np.linspace(0, 100, 20)
-        self.surplus_bins = np.linspace(-300, 300, 100)
+        self.surplus_bins = np.linspace(-25, 25, 25)
 
         # --- Exploration & visit-counts ---
         self.visit_counts = {}  # key: (s_key, a_key) -> int
@@ -66,7 +66,7 @@ class DoubleQLearningAgent:
         self.epsilon_min = 0.05
         self.epsilon_decay = 0.9995  # slow decay
         self.epsilon_boost = 0.6  # boost when stuck
-        self.stagnant_limit = 200  # episodes without improvement to consider "stuck"
+        self.stagnant_limit = 5000  # episodes without improvement to consider "stuck"
 
         # Episode-level tracking (use notify_episode_end for correct behavior)
         self.best_episode_reward = -1e9
