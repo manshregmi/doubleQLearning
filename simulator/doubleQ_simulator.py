@@ -1,9 +1,11 @@
 from model.doubleQ import DoubleQLearningAgent
 from profiling.profile import ProfilingData
 import numpy as np
+import matplotlib.pyplot as plt
 
 def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
-    agent = DoubleQLearningAgent(profiling_data, is_test=True)
+    is_test = True
+    agent = DoubleQLearningAgent(profiling_data, is_test=is_test)
     edge_energy = []
     completion_time = []
     rewards = []
@@ -45,6 +47,11 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
         percetage_of_optimum.append(resemblance)
         if all_match:
             optimumCount += 1
+
+        if (total_energy < 3 and total_time < 500):
+            print(total_energy, total_time ,"value received")
+            return total_energy, total_time
+
         edge_energy.append(total_energy)
         completion_time.append(total_time)
         rewards.append(total_reward)
@@ -56,6 +63,24 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
         print(f"Error saving Q-tables: {e}")   
     E = np.array(edge_energy)
     T = np.array(completion_time)
+    R = np.array(rewards)
+    # if ( not is_test):
+    #     smoothed = np.convolve(R, np.ones(50)/50, mode='valid')
+    #     plt.figure(figsize=(8,5))
+    #     plt.plot(smoothed)
+    #     plt.xlabel("Episodes")
+    #     plt.ylabel("Smoothed Reward")
+    #     plt.title("Double Q-Learning Convergence")
+    #     plt.grid(True)
+    #     plt.tight_layout()
+    #     plt.show()
+    #     pdf_path = f"dq_convergence.pdf"
+    #     plt.savefig(pdf_path)
+
+
+
+
+
     print("----- Simulation Results -----")
     print("optimum action counts per layer:", agent.optimum_action_layer_count)
     print("last layer Not optimum count:", agent.last_layer_not_optimum)
@@ -64,5 +89,6 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
 
     print(f"DQ Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, Lower Bound: {E.min():.3f} J, Upper Bound: {E.max():.3f} J , Lowest index: {np.argmin(E)}, Reward at that index: {rewards[np.argmin(E)]:.3f} time at that index: {T[np.argmin(E)]:.3f} ms")
     print(f"DQ Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, Lower Bound: {T.min():.3f} ms, Upper Bound: {T.max():.3f} ms, Lowest index: {np.argmin(T)}, Reward at that index: {rewards[np.argmin(T)]:.3f} energy at that index: {E[np.argmin(T)]:.3f} J")
-    return E.mean(), T.mean()
+    # print("median reward is ",)
+    return E.mean(), T.mean(),
 
