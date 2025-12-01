@@ -31,7 +31,10 @@ class CloudEdgeSimulator:
 
         # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(current_action[:, 1] == 1)[0]
-        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0.1,0.5))
+        congession_random = np.random.uniform(0.1,0.5)
+        next_available_random = 1- congession_random
+        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * congession_random)
+        next_available_capacity = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * next_available_random)
         # congestion = 0.0
         new_cloud_pending = 0.0
         new_cloud_pending += congestion
@@ -42,6 +45,7 @@ class CloudEdgeSimulator:
             cloud_proc_ms = max(self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes)
             # New pending =  new cloud work + congestion
             new_cloud_pending += max(0.0,  cloud_proc_ms)
+            next_available_capacity += max(0.0,  cloud_proc_ms)
         
         # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(current_action[:, 1] == 1)[0]
@@ -55,7 +59,7 @@ class CloudEdgeSimulator:
             new_cloud_pending = max(0.0,  cloud_proc_ms)*self.profiling.numberOfEdgeDevice
 
 
-        return  new_cloud_pending
+        return  new_cloud_pending, next_available_capacity
 
     def get_next_state(self, current_state, action, surplus, negative_surplus_count, new_cloud_pending):
         bandwidth, _, layer, _, _, negative_surplus_count = current_state
