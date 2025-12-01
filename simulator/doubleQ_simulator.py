@@ -48,9 +48,6 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
         if all_match:
             optimumCount += 1
 
-        if (total_energy < 3 and total_time < 500):
-            print(total_energy, total_time ,"value received")
-            return total_energy, total_time
 
         edge_energy.append(total_energy)
         completion_time.append(total_time)
