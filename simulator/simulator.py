@@ -152,7 +152,7 @@ class CloudEdgeSimulator:
 
         # --- Completion Time (seconds) ---
         completion_time_s = edge_total_time_s + max_transmission_time + actual_idle_time_s
-        print(f"Layer {layer} | cloud waiting time: {cloud_pending_ms} | Transmission time: {max_transmission_time*1000:.2f} ms |Total Time: {completion_time_s*1000:.2f} ms | Energy: {total_energy:.4f} J, action: {current_action[:,1].tolist()}, bandwidth:, {bandwidth}")
+        # print(f"Layer {layer} | cloud waiting time: {cloud_pending_ms} | Transmission time: {max_transmission_time*1000:.2f} ms |Total Time: {completion_time_s*1000:.2f} ms | Energy: {total_energy:.4f} J, action: {current_action[:,1].tolist()}, bandwidth:, {bandwidth}")
 
         return total_energy, completion_time_s
 

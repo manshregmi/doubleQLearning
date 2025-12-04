@@ -197,7 +197,9 @@ def build_csp_graph_from_profiling(prof: ProfilingData):
     G.add_node("s")
 
 
-    congesstion = (prof.numberOfEdgeDevice - 1) * np.random.uniform(0.25,0.5)
+    congesstion = (prof.numberOfEdgeDevice - 1) * np.random.uniform(0.1,0.5)
+    # congesstion = (prof.numberOfEdgeDevice - 1) * 0.25
+    # congesstion = 0.0
     bandwidth = prof.bandwidth
     bandwidth_changes = []
     for _ in range(len(layers)):
@@ -341,7 +343,7 @@ if __name__ == "__main__":
     # Count how many times each solution path is repeated
     solution_counts = defaultdict(int)
 
-    prof = get_profiling_data(600)   
+    prof = get_profiling_data(500)   
     print("Profiling data initialized.")
 
     sim = CloudEdgeSimulator(prof)
@@ -352,7 +354,7 @@ if __name__ == "__main__":
     csp_energies = []
     csp_times = []
     
-    for _ in range(1000):
+    for _ in range(10000):
         state = (
             prof.bandwidth,     # initial bandwidth
             0.0,                # cloud pending
@@ -384,13 +386,19 @@ if __name__ == "__main__":
         print("\n=== SOLUTION PATH ===")
         for n in solution:
             print(n)
+            
         total_energy = sum(G[solution[i]][solution[i+1]]["cost"] for i in range(len(solution)-1))
         total_bound = sum(G[solution[i]][solution[i+1]]["bound"] for i in range(len(solution)-1))
         print(f"\nTotal Energy (J): {total_energy:.6f}")
         print(f"Total Time (ms): {total_bound:.3f}")
 
         assigns = decode_assignments_from_path(solution)
-
+        # print("Per-layer assignments (layer0 -> ... -> last):", assigns) 
+        # print("\nPer-layer details:")
+        # for i in range(len(solution)-1):
+        #      u, v = solution[i], solution[i+1] 
+        #      d = G[u][v].get("details", {}) 
+        #      print(f"{u} -> {v}: cost={G[u][v]['cost']:.3f} J, bound={G[u][v]['bound']:.3f} ms, details={d}")
         total_energy_sim = 0.0
         total_time_sim = 0.0
 
