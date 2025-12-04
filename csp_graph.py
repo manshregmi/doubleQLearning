@@ -365,10 +365,10 @@ if __name__ == "__main__":
         )
         
         G, last_layer_states = build_csp_graph_from_profiling(prof)
-        print("Graph nodes:", G.number_of_nodes(), "edges:", G.number_of_edges())
-        print("Terminals (last layer):", [s[0] for s in last_layer_states])
+        # print("Graph nodes:", G.number_of_nodes(), "edges:", G.number_of_edges())
+        # print("Terminals (last layer):", [s[0] for s in last_layer_states])
 
-        print("Solving CSP...")
+        # print("Solving CSP...")
         solution = constrained_shortest_path(G, last_layer_states, prof.deadline, verbose=True)
 
         # -----------------------------
@@ -383,14 +383,14 @@ if __name__ == "__main__":
             print("\nNO FEASIBLE SOLUTION FOUND (bound-optimal > deadline)")
             continue
 
-        print("\n=== SOLUTION PATH ===")
-        for n in solution:
-            print(n)
+        # print("\n=== SOLUTION PATH ===")
+        # for n in solution:
+        #     print(n)
             
         total_energy = sum(G[solution[i]][solution[i+1]]["cost"] for i in range(len(solution)-1))
         total_bound = sum(G[solution[i]][solution[i+1]]["bound"] for i in range(len(solution)-1))
-        print(f"\nTotal Energy (J): {total_energy:.6f}")
-        print(f"Total Time (ms): {total_bound:.3f}")
+        # print(f"\nTotal Energy (J): {total_energy:.6f}")
+        # print(f"Total Time (ms): {total_bound:.3f}")
 
         assigns = decode_assignments_from_path(solution)
         # print("Per-layer assignments (layer0 -> ... -> last):", assigns) 
