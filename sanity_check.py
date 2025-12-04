@@ -12,9 +12,9 @@ bandwidth = profiling_data.bandwidth  # Mbps
 current_state = (bandwidth, 0, 0, None, 0.0, 0)  # bandwidth, cloud_time, layer, prev_action, surplus, neg_count
 actions = [
         [[0,0]],
-        [[1,0]],
-        [[2,0]],
-        [[3,1],[3,1],[3,1]],
+        [[1,1]],
+        [[2,1]],
+        [[3,0],[3,1],[3,1]],
         [[4,1],[4,1],[4,1]],
         [[5,1],[5,1],[5,1]],
         [[6,0]]
