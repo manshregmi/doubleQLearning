@@ -10,7 +10,7 @@ class ProfilingData:
         node_cloud_times, # Dict {(layer_idx, node_idx): comp_time on cloud}
         bandwidth,
         rtt,
-        output_size,       # Dict {(layer_idx, node_idx): output size in KB}
+        input_size,       # Dict {(layer_idx, node_idx): input size in KB}
         node_edge_powers,  # Dict {(layer_idx, node_idx): power on edge}
         edge_idle_power,
         deadline,
@@ -23,7 +23,7 @@ class ProfilingData:
         self.node_cloud_times = node_cloud_times
         self.bandwidth = bandwidth
         self.rtt = rtt
-        self.output_size = output_size
+        self.input_size = input_size
         self.node_edge_powers = node_edge_powers
         self.edge_idle_power = edge_idle_power
         self.deadline = deadline
@@ -83,7 +83,7 @@ class ProfilingData:
         return max(len(layer) for layer in self.layers)
     
     def get_output_size(self, layer_idx, node_idx):
-        return self.output_size.get((layer_idx, node_idx), 1.0)
+        return self.input_size.get((layer_idx, node_idx), 1.0)
     
     def get_max_layer_cloud_time(self, layer_idx):
         max_time = 0.0

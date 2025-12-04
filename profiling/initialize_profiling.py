@@ -56,7 +56,7 @@ def get_profiling_data(deadline):
         (3, 0): 4.6, (3,1): 3.5, (3,2): 2.6,  #  v4,v7,v10
 
         # level 4 
-        (4, 0): 5.5, (4, 1): 7.0, (4, 2): 7.0,  # v5,v8,v11
+        (4, 0): 42, (4, 1): 7.0, (4, 2): 7.0,  # v5,v8,v11
 
         (5,0): 0.2,  (5,1): 0.1, (5,2): 0.1,  # v6 , v9 , v12
 
@@ -87,7 +87,7 @@ def get_profiling_data(deadline):
         (6,0): 0.1,     #v13
     }
 
-    output_size = {
+    input_size = {
         (0,0): 8100,
         (1,0): 3072,
         (2,0): 1275,
@@ -121,7 +121,7 @@ def get_profiling_data(deadline):
         node_cloud_times=node_cloud_times,
         bandwidth=8,
         rtt=4.5,
-        output_size=output_size,
+        input_size=input_size,
         node_edge_powers=node_edge_powers,
         edge_idle_power=4.24,
         deadline=deadline,
