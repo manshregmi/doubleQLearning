@@ -87,7 +87,7 @@ def get_profiling_data(deadline):
         (6,0): 0.1,     #v13
     }
 
-    output_size = {
+    input_size = {
         (0,0): 8100,
         (1,0): 3072,
         (2,0): 1275,
@@ -121,7 +121,7 @@ def get_profiling_data(deadline):
         node_cloud_times=node_cloud_times,
         bandwidth=8,
         rtt=4.5,
-        output_size=output_size,
+        input_size=input_size,
         node_edge_powers=node_edge_powers,
         edge_idle_power=4.24,
         deadline=deadline,
