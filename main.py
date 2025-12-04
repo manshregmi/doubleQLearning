@@ -9,7 +9,7 @@ import numpy as np
 
 
 if __name__ == "__main__":
-    episodes = 100
+    episodes = 10000
     # episodes = 1
     max_steps = 10
     deadlines = list(range(500,505,5 ))  # 1ms to 700ms
@@ -25,11 +25,11 @@ if __name__ == "__main__":
         print("Running simulations for deadline: {} ms".format(d))
         profiling_data = get_profiling_data(d)
 
-        # e, t = run_simulation(profiling_data, episodes, max_steps)
-        # dq_energy.append(e)
-        # dq_time.append(t)
-        # if (e<3):
-        #     break
+        e, t = run_simulation(profiling_data, episodes, max_steps)
+        dq_energy.append(e)
+        dq_time.append(t)
+        
+    
         # a2c_e, a2c_t = run_a2c_simulation(profiling_data, episodes, max_steps)
         # a2c_energy.append(a2c_e)
         # a2c_time.append(a2c_t)
@@ -46,9 +46,9 @@ if __name__ == "__main__":
         # edge_energy.append(ee)
         # edge_time.append(et)
 
-        ce, ct = run_random_scheduler(profiling_data, 100, max_steps, is_random=False, is_all_cloud=True)
-        cloud_energy.append(ce)
-        cloud_time.append(ct)
+        # ce, ct = run_random_scheduler(profiling_data, 100, max_steps, is_random=False, is_all_cloud=True)
+        # cloud_energy.append(ce)
+        # cloud_time.append(ct)
 
     # # Plot Energy vs Deadline
     # plt.figure(figsize=(8, 6))
@@ -84,7 +84,7 @@ if __name__ == "__main__":
 
 
     # print("Simulations completed.")
-    print("all cloud energy", np.mean(cloud_energy), "cloud time", np.mean(cloud_time))
+    # print("all cloud energy", np.mean(cloud_energy), "cloud time", np.mean(cloud_time))
     # # print("all edge energy", np.mean(edge_energy))
     # # print("dq energy", np.mean(dq_energy))
     # # print("a2c energy", np.mean(a2c_energy))
