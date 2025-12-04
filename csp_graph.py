@@ -5,6 +5,8 @@ import networkx as nx
 from profiling.initialize_profiling import get_profiling_data
 from profiling.profile import ProfilingData
 from simulator.simulator import CloudEdgeSimulator
+from collections import defaultdict
+
 
 def pattern_to_action_matrix(layer, pattern_str):
     """
@@ -44,7 +46,7 @@ def compute_energy_and_time_layer(prof: ProfilingData,
     bandwidth: same unit you use (seconds formula: (in_kB/1024)/bandwidth )
     Returns: (total_energy_J, completion_time_s, details_dict)
     """
-    print(f"Computing energy/time for bandwidth {bandwidth} and congestion {congestion}")
+    # print(f"Computing energy/time for bandwidth {bandwidth} and congestion {congestion}")
     deps = prof.dependencies
     total_energy = 0.0
 
@@ -117,7 +119,6 @@ def compute_energy_and_time_layer(prof: ProfilingData,
 
     actual_idle_time_s = 0.0
     if cloud_pending_s > 0:
-        cloud_pending_s += (congestion * (prof.get_max_layer_cloud_time(layer) / 1000.0))
         max_cloud_time_ms = prof.get_max_layer_cloud_time(layer)
         cloud_pending_s += ((congestion * max_cloud_time_ms) / 1000.0)
         actual_idle_time_s = max(0.0, cloud_pending_s - edge_total_time_s) 
@@ -196,11 +197,12 @@ def build_csp_graph_from_profiling(prof: ProfilingData):
     G.add_node("s")
 
 
-    congesstion = (prof.numberOfEdgeDevice - 1) * np.random.uniform(0.15,0.5)
+    congesstion = (prof.numberOfEdgeDevice - 1) * np.random.uniform(0.25,0.5)
     bandwidth = prof.bandwidth
     bandwidth_changes = []
     for _ in range(len(layers)):
         bandwidth = prof.bandwidth + (np.random.uniform(-0.5,0.5))
+        # bandwidth = prof.bandwidth + 0.0
         bandwidth_changes.append(bandwidth)
 
     bandwidth = np.mean(bandwidth_changes)
@@ -335,30 +337,50 @@ def decode_assignments_from_path(path):
 # Main
 # -----------------------------
 if __name__ == "__main__":
-    prof = get_profiling_data(700)   # choose deadline in ms
+    
+    # Count how many times each solution path is repeated
+    solution_counts = defaultdict(int)
+
+    prof = get_profiling_data(600)   
     print("Profiling data initialized.")
 
     sim = CloudEdgeSimulator(prof)
 
-    state = (prof.bandwidth,       # initial bandwidth
-         0.0,                  # cloud pending
-         0,                    # starting layer
-         None,                 # prev_action
-         0.0,                  # surplus
-         0)                    # negative_surplus_count
+    actual_energy = []
+    actual_time = []
 
+    csp_energies = []
+    csp_times = []
+    
+    for _ in range(1000):
+        state = (
+            prof.bandwidth,     # initial bandwidth
+            0.0,                # cloud pending
+            0,                  # starting layer
+            None,               # prev_action
+            0.0,                # surplus
+            0                   # negative_surplus_count
+        )
+        
+        G, last_layer_states = build_csp_graph_from_profiling(prof)
+        print("Graph nodes:", G.number_of_nodes(), "edges:", G.number_of_edges())
+        print("Terminals (last layer):", [s[0] for s in last_layer_states])
 
-    print("Building CSP graph...")
-    G, last_layer_states = build_csp_graph_from_profiling(prof)
-    print("Graph nodes:", G.number_of_nodes(), "edges:", G.number_of_edges())
-    print("Terminals (last layer):", [s[0] for s in last_layer_states])
+        print("Solving CSP...")
+        solution = constrained_shortest_path(G, last_layer_states, prof.deadline, verbose=True)
 
-    print("Solving CSP...")
-    solution = constrained_shortest_path(G, last_layer_states, prof.deadline, verbose=True)
+        # -----------------------------
+        # COUNT SOLUTION REPETITION
+        # -----------------------------
+        if solution is not None:
+            solution_key = tuple(solution)   # lists can't be dict keys
+            solution_counts[solution_key] += 1
+        # -----------------------------
 
-    if solution is None:
-        print("\nNO FEASIBLE SOLUTION FOUND (bound-optimal > deadline)")
-    else:
+        if solution is None:
+            print("\nNO FEASIBLE SOLUTION FOUND (bound-optimal > deadline)")
+            continue
+
         print("\n=== SOLUTION PATH ===")
         for n in solution:
             print(n)
@@ -368,12 +390,6 @@ if __name__ == "__main__":
         print(f"Total Time (ms): {total_bound:.3f}")
 
         assigns = decode_assignments_from_path(solution)
-        print("Per-layer assignments (layer0 -> ... -> last):", assigns)
-        print("\nPer-layer details:")
-        for i in range(len(solution)-1):
-            u, v = solution[i], solution[i+1]
-            d = G[u][v].get("details", {})
-            print(f"{u} -> {v}: cost={G[u][v]['cost']:.3f} J, bound={G[u][v]['bound']:.3f} ms, details={d}")
 
         total_energy_sim = 0.0
         total_time_sim = 0.0
@@ -385,33 +401,26 @@ if __name__ == "__main__":
 
         for layer_idx, pat in enumerate(assigns):
 
-            # convert CSP pattern → action matrix
             action = pattern_to_action_matrix(layer_idx, pat)
-            # print(f"\n[SIMULATION] Layer {layer_idx}, Pattern: {pat}, Action:\n{action}")
 
-            # compute waiting time
             cloud_pending = sim.get_next_state_cloud_waiting_time(
                 layer_idx,
                 action,
             )
 
-            # compute energy and time
             E, T = sim.compute_energy_and_time(
                 (state[0], state[1], layer_idx, prev_action, surplus, neg_count),
                 action,
                 cloud_pending
             )
 
-            # reward (if needed)
             reward, surplus, neg_count, frac = sim.calculate_reward(
                 layer_idx, E, T, surplus, neg_count
             )
-            # print(f"[SIMULATION] Layer {layer_idx}, Energy: {E:.6f} J, Time: {T*1000.0:.3f} ms")
 
             total_energy_sim += E
             total_time_sim += T
 
-            # prepare next state
             state, terminal, cloud_pending = sim.get_next_state(
                 (state[0], state[1], layer_idx, prev_action, surplus, neg_count),
                 action,
@@ -424,8 +433,33 @@ if __name__ == "__main__":
 
             if terminal:
                 break
-        print(f"\n[SIMULATION CHECK] Total Energy (J): {total_energy_sim:.6f}")
-        print(f"[SIMULATION CHECK] Total Time (ms): {total_time_sim:.3f}")
 
+        actual_energy.append(total_energy_sim)
+        actual_time.append(total_time_sim * 1000.0)
+        csp_energies.append(total_energy)
+        csp_times.append(total_bound)
 
-            
+    # ----------------------------------------------------
+    # ============ SUMMARY OVER ALL RUNS =================
+    # ----------------------------------------------------
+    print("\n=== SUMMARY OVER 1000 RUNS ===")
+    print(f"Avg CSP Energy (J): {np.mean(csp_energies):.6f} ± {np.std(csp_energies):.6f}")
+    print(f"Avg Actual Energy (J): {np.mean(actual_energy):.6f} ± {np.std(actual_energy):.6f}")
+    print(f"Avg CSP Time (ms): {np.mean(csp_times):.3f} ± {np.std(csp_times):.3f}")
+    print(f"Avg Actual Time (ms): {np.mean(actual_time):.3f} ± {np.std(actual_time):.3f}")
+
+    # ----------------------------------------------------
+    # ============== PRINT SOLUTION COUNTS ===============
+    # ----------------------------------------------------
+    print("\n=== SOLUTION REPETITION COUNT ===")
+
+    if len(solution_counts) == 0:
+        print("No feasible solutions in any run.")
+    else:
+        sorted_solutions = sorted(solution_counts.items(), key=lambda x: x[1], reverse=True)
+
+        for sol, count in sorted_solutions:
+            print(f"\nSolution occurred {count} times:")
+            print(list(sol))
+
+                

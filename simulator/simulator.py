@@ -33,6 +33,8 @@ class CloudEdgeSimulator:
         cloud_nodes = np.where(current_action[:, 1] == 1)[0]
         congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0.25,0.5))
         # congestion = 0.0
+        # congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * 0.25)
+
         new_cloud_pending = 0.0
         new_cloud_pending += congestion
 
