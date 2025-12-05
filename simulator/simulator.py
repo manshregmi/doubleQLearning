@@ -31,8 +31,8 @@ class CloudEdgeSimulator:
 
         # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(current_action[:, 1] == 1)[0]
-        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0.25,0.5))
-        # congestion = 0.0
+        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0.75,1))
+        congestion = 0.0
         # congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * 0.25)
 
         new_cloud_pending = 0.0
@@ -65,8 +65,8 @@ class CloudEdgeSimulator:
 
         
         # Bandwidth update (stochastic)
-        bw_change = np.random.uniform(-0.5, 0.5)
-        # bw_change = 0
+        bw_change = np.random.uniform(-1.5, 0.5)
+        bw_change = 0
         new_bandwidth = max(1.0, min(bandwidth + bw_change, 15.0))
 
         # Next layer / terminal flag

@@ -197,14 +197,14 @@ def build_csp_graph_from_profiling(prof: ProfilingData):
     G.add_node("s")
 
 
-    congesstion = (prof.numberOfEdgeDevice - 1) * np.random.uniform(0.25,0.5)
+    congesstion = (prof.numberOfEdgeDevice - 1) * np.random.uniform(0.75,1)
     # congesstion = (prof.numberOfEdgeDevice - 1) * 0.25
     # congesstion = 0.0
     bandwidth = prof.bandwidth
     bandwidth_changes = []
     for _ in range(len(layers)):
-        bandwidth = prof.bandwidth + (np.random.uniform(-1.5,1.5))
-        # bandwidth = prof.bandwidth + 0.0
+        bandwidth = prof.bandwidth + (np.random.uniform(-1.5,1.5)) 
+        # bandwidth = prof.bandwidth + 0.0  
         bandwidth_changes.append(bandwidth)
 
     bandwidth = np.mean(bandwidth_changes)
