@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 
 def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
-    is_test = False
+    is_test = True
     agent = DoubleQLearningAgent(profiling_data, is_test=is_test)
     edge_energy = []
     completion_time = []
@@ -82,6 +82,18 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
             for step_action in seq:
                 print(step_action)
             print("---")
+    
+        # --------------------------------------------------------------
+    #                HISTOGRAM OF ENERGY VALUES
+    # --------------------------------------------------------------
+    plt.figure(figsize=(8, 5))
+    plt.hist(edge_energy, bins=50)
+    plt.xlabel("Energy Consumption (Joules)")
+    plt.ylabel("Frequency")
+    plt.title("Histogram of Episode Energy Consumption")
+    plt.grid(True, linestyle="--", alpha=0.6)
+    plt.show()
+
 
 
     return E.mean(), T.mean()
