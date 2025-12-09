@@ -31,7 +31,7 @@ class CloudEdgeSimulator:
 
         # Determine which nodes are on the cloud for this action
         cloud_nodes = np.where(current_action[:, 1] == 1)[0]
-        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0.1,0.5))
+        congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * np.random.uniform(0.25,0.75))
         # congestion = 0.0
         # congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * (self.profiling.numberOfEdgeDevice - 1) * 0.25)
 
@@ -152,7 +152,7 @@ class CloudEdgeSimulator:
 
         # --- Completion Time (seconds) ---
         completion_time_s = edge_total_time_s + max_transmission_time + actual_idle_time_s
-        print(f"Layer {layer} | cloud waiting time: {cloud_pending_ms} | Total Time: {completion_time_s*1000:.2f} ms | Energy: {total_energy:.4f} J, action: {current_action[:,1].tolist()}, bandwidth:, {bandwidth}")
+        # print(f"Layer {layer} | cloud waiting time: {cloud_pending_ms} | Total Time: {completion_time_s*1000:.2f} ms | Energy: {total_energy:.4f} J, action: {current_action[:,1].tolist()}, bandwidth:, {bandwidth}")
 
         return total_energy, completion_time_s
 
