@@ -11,7 +11,7 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
     edge_energy = []
     completion_time = []
     rewards = []
-    comp_time = []
+    comp_times = []
 
     agent.load_qtables()
 
@@ -26,18 +26,20 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
 
 
     for ep in range(episodes):
-        episode_start_time = time.time()
         total_energy, total_time, total_reward = 0.0, 0.0, 0.0
 
         cloud_time = 0.0
         current_state = (profiling_data.bandwidth, cloud_time, 0, None, 0, 0)
         overall_action = []
+        total_comp_time = 0.0
+
 
         for step in range(max_steps):
-            action, reward, next_state, terminal, energy, completionTime, new_bandwidth, _, _ = agent.train(current_state)
+            action, reward, next_state, terminal, energy, completionTime, new_bandwidth, _, _, comp_time = agent.train(current_state)
             overall_action.append(tuple(map(tuple, action)))  # ensure hashable
 
             total_energy += energy
+            total_comp_time += comp_time
             total_time += (completionTime * 1000)  # ms
             total_reward += reward
             current_state = next_state
@@ -46,9 +48,7 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
                 bandwidth = new_bandwidth
                 break
         # ==================================================
-        episode_end_time = time.time()
-        total_time_per_episode = episode_end_time - episode_start_time
-        comp_time.append(total_time_per_episode)
+        comp_times.append(total_comp_time)
 
         # Add the action sequence to the counter
         action_sequence_key = tuple(overall_action)
@@ -72,11 +72,11 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
 
 
     print("\n===== DOUBLE Q-LEARNING SIMULATION RESULTS =====\n")
-    print("total time for", episodes ,"episodes: {:.10f} seconds".format(np.sum(comp_time)))
-    print("Average time per episode: {:.10f} seconds".format(np.mean(comp_time)))
-    print("standard deviation of time per episode: {:.10f} seconds".format(np.std(comp_time)))
-    print("max time for an episode: {:.10f} seconds".format(np.max(comp_time)))
-    print("min time for an episode: {:.10f} seconds".format(np.min(comp_time)))
+    print("total time for", episodes ,"episodes: {:.10f} seconds".format(np.sum(comp_times)))
+    print("Average time per episode: {:.10f} seconds".format(np.mean(comp_times)))
+    print("standard deviation of time per episode: {:.10f} seconds".format(np.std(comp_times)))
+    print("max time for an episode: {:.10f} seconds".format(np.max(comp_times)))
+    print("min time for an episode: {:.10f} seconds".format(np.min(comp_times)))
     print("===============================================\n")
 
     # print("----- Simulation Results -----")
