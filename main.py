@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from reference_schedulers.random_scheduler import run_random_scheduler
 from simulator.a2c_simulator import run_a2c_simulation
 from simulator.doubleQ_simulator import run_simulation
-from simulator.sac_simulator import run_sac_simulation
 import numpy as np
 
 

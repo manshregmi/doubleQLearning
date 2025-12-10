@@ -22,10 +22,11 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
     action_sequence_counts = defaultdict(int)
     # ==========================================================
 
-    timestamp = time.time()
-    print(timestamp)
+
 
     for ep in range(episodes):
+        timestamp = time.time()
+        print(timestamp)
         total_energy, total_time, total_reward = 0.0, 0.0, 0.0
 
         cloud_time = 0.0
@@ -44,7 +45,8 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
             if terminal:
                 bandwidth = new_bandwidth
                 break
-            
+        print("Simulation Time:", time.time() - timestamp)
+    
         # Add the action sequence to the counter
         action_sequence_key = tuple(overall_action)
         action_sequence_counts[action_sequence_key] += 1
@@ -53,7 +55,6 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
         completion_time.append(total_time)
         total_episode_actions.append(overall_action)
         rewards.append(total_reward)
-    print("Simulation Time:", time.time() - timestamp)
 
     if not is_test:    
         # Try saving Q-tables
