@@ -9,7 +9,7 @@ import numpy as np
 
 if __name__ == "__main__":
     # episodes = 100000
-    episodes = 1
+    episodes = 1000
     max_steps = 10
     deadlines = list(range(500,505,5 ))  # 1ms to 700ms
 

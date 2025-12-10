@@ -6,11 +6,12 @@ from collections import defaultdict
 import time
 
 def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
-    is_test = True
+    is_test = False
     agent = DoubleQLearningAgent(profiling_data, is_test=is_test)
     edge_energy = []
     completion_time = []
     rewards = []
+    comp_time = []
 
     agent.load_qtables()
 
@@ -25,8 +26,7 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
 
 
     for ep in range(episodes):
-        timestamp = time.time()
-        print(timestamp)
+        episode_start_time = time.time()
         total_energy, total_time, total_reward = 0.0, 0.0, 0.0
 
         cloud_time = 0.0
@@ -45,8 +45,11 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
             if terminal:
                 bandwidth = new_bandwidth
                 break
-        print("Simulation Time:", time.time() - timestamp)
-    
+        # ==================================================
+        episode_end_time = time.time()
+        total_time_per_episode = episode_end_time - episode_start_time
+        comp_time.append(total_time_per_episode)
+
         # Add the action sequence to the counter
         action_sequence_key = tuple(overall_action)
         action_sequence_counts[action_sequence_key] += 1
@@ -66,6 +69,15 @@ def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
     E = np.array(edge_energy)
     T = np.array(completion_time)
     R = np.array(rewards)
+
+
+    print("\n===== DOUBLE Q-LEARNING SIMULATION RESULTS =====\n")
+    print("total time for", episodes ,"episodes: {:.10f} seconds".format(np.sum(comp_time)))
+    print("Average time per episode: {:.10f} seconds".format(np.mean(comp_time)))
+    print("standard deviation of time per episode: {:.10f} seconds".format(np.std(comp_time)))
+    print("max time for an episode: {:.10f} seconds".format(np.max(comp_time)))
+    print("min time for an episode: {:.10f} seconds".format(np.min(comp_time)))
+    print("===============================================\n")
 
     # print("----- Simulation Results -----")
     # print(f"DQ Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, Lower Bound: {E.min():.3f} J, Upper Bound: {E.max():.3f} J , Lowest index: {np.argmin(E)}, Reward at that index: {R[np.argmin(E)]:.3f} time at that index: {T[np.argmin(E)]:.3f} ms")
