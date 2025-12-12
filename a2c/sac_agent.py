@@ -114,6 +114,8 @@ class SACAgent:
         self.max_action = max_action
         self.is_test = is_test  # ✅ store flag
 
+        print(f"SAC Agent initialized on device: {self.device} | Test Mode: {self.is_test}")
+
         # Actor and Critics
         self.actor = Actor(state_dim, action_dim, max_action).to(self.device)
         self.critic1 = Critic(state_dim, action_dim).to(self.device)
