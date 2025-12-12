@@ -1,4 +1,5 @@
 # simulator/sac_simulator.py
+import time
 import numpy as np
 import torch
 import random
@@ -115,6 +116,7 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
 
     edge_energy_log = []
     completion_time_log = []
+    computation_time_log = []
 
     for ep in range(episodes):
         total_reward = 0.0
@@ -125,11 +127,17 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
         current_surplus = 0.0
         current_neg_count = 0
         actions_taken = []
+        comp_time = 0.0
 
         for step in range(max_steps):
             flat_state = flatten_state(current_state, max_layers, max_nodes)
             # --- SAC selects action (returns discrete matrix) ---
+
+            start_time = time.time()
             discrete_action = agent.select_action(flat_state, layer=current_state[2], simulator=simulator, epsilon=0.2)
+            end_time = time.time()
+
+            comp_time += (end_time - start_time)
             actions_taken.append(discrete_action.copy())
 
             if discrete_action.size == 0:
@@ -182,17 +190,19 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
             current_state = next_state
 
             if terminal:
-                bandwidth = current_state[0]
-                cloud_time = current_state[1]
+                # bandwidth = current_state[0]
+                # cloud_time = current_state[1]
                 break
 
         edge_energy_log.append(total_energy)
         completion_time_log.append(total_time)
+        computation_time_log.append(comp_time)
 
 
 
         E = np.array(edge_energy_log)
         T = np.array(completion_time_log)
+        comp_times = np.array(computation_time_log)
 
         # --- Print nicely per episode ---
         if (ep + 1) % 1000 == 0:
@@ -207,7 +217,8 @@ def run_sac_simulation(profiling_data: ProfilingData, episodes=1000, max_steps=2
 
     E = np.array(edge_energy_log)
     T = np.array(completion_time_log)
+    print("----- SAC Simulation Results -----")
     print(f"SAC Avg Energy: {E.mean():.3f} J, Std: {E.std():.3f}, Lower Bound: {E.min():.3f} J, Upper Bound: {E.max():.3f} J , Lowest index: {np.argmin(E)} time at that index: {T[np.argmin(E)]:.3f} ms")
     print(f"SAC Avg Time: {T.mean():.3f} ms, Std: {T.std():.3f}, Lower Bound: {T.min():.3f} ms, Upper Bound: {T.max():.3f} ms, Lowest index: {np.argmin(T)} energy at that index: {E[np.argmin(T)]:.3f} J")      
-
+    print(f"SAC Avg Computation Time per Episode: {comp_times.mean():.10f} s, Std: {comp_times.std():.10f} s Total Computation Time: {comp_times.sum():.4f} s Min: {comp_times.min():.10f} s, Max: {comp_times.max():.10f} s Max Episode Index: {comp_times.max():.10f} s")
     return np.mean(E), np.mean(T)

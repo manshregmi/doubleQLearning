@@ -10,7 +10,7 @@ import numpy as np
 
 if __name__ == "__main__":
     # episodes = 100000
-    episodes = 1
+    episodes = 1000
     max_steps = 10
     deadlines = list(range(500,505,5 ))  # 1ms to 700ms
 
@@ -25,18 +25,18 @@ if __name__ == "__main__":
         print("Running simulations for deadline: {} ms".format(d))
         profiling_data = get_profiling_data(d)
 
-        e, t = run_simulation(profiling_data, episodes, max_steps)
-        dq_energy.append(e)
-        dq_time.append(t)
+        # e, t = run_simulation(profiling_data, episodes, max_steps)
+        # dq_energy.append(e)
+        # dq_time.append(t)
         
     
         # a2c_e, a2c_t = run_a2c_simulation(profiling_data, episodes, max_steps)
         # a2c_energy.append(a2c_e)
         # a2c_time.append(a2c_t)
 
-        # # sac_e, sac_t = run_sac_simulation(profiling_data, episodes, max_steps)
-        # # sac_energy.append(sac_e)
-        # # sac_time.append(sac_t)
+        sac_e, sac_t = run_sac_simulation(profiling_data, episodes, max_steps)
+        sac_energy.append(sac_e)
+        sac_time.append(sac_t)
 
         # re, rt = run_random_scheduler(profiling_data, 100, max_steps, is_random=True, is_all_cloud=False)
         # random_energy.append(re)
