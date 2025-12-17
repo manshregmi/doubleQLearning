@@ -11,7 +11,10 @@ class A2CAgent:
         alpha_p=0.02,
         gamma=0.95,
         epsilon=1,
-        is_test=False
+        is_test=False,
+        BW_bins=15,
+        CT_bins=20,
+        surplus_bins=25,
     ):
         self.profiling = profiling_data
         self.alpha_v = alpha_v
@@ -29,9 +32,9 @@ class A2CAgent:
         self.filename_policy = "policy_table.npy"
 
         # Discretization bins
-        self.bandwidth_bins = np.linspace(1, 15, 15)
-        self.cloudtime_bins = np.linspace(0, 100, 20)
-        self.surplus_bins = np.linspace(-25, 25, 25)
+        self.bandwidth_bins = np.linspace(1, 15, BW_bins)
+        self.cloudtime_bins = np.linspace(0, 100, CT_bins)
+        self.surplus_bins = np.linspace(-25, 25, surplus_bins)
 
         # -------------------------------
         # ε-GREEDY EXPLORATION CONTROL

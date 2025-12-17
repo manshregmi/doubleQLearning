@@ -27,6 +27,9 @@ class DoubleQLearningAgent:
         alpha: float = 0.05,
         gamma: float = 0.95,
         epsilon: float = 1.0,
+        BW_bins: int = 15,
+        CT_bins: int = 20,
+        surplus_bins: int = 25,
     ):
         """
         Args:
@@ -54,9 +57,9 @@ class DoubleQLearningAgent:
         self.simulator = CloudEdgeSimulator(profiling_data)
 
         # --- Discretization bins (same defaults you had) ---
-        self.bandwidth_bins = np.linspace(1, 15, 15)
-        self.cloudtime_bins = np.linspace(0, 100, 20)
-        self.surplus_bins = np.linspace(-25, 25, 25)
+        self.bandwidth_bins = np.linspace(1, 15, BW_bins)
+        self.cloudtime_bins = np.linspace(0, 100, CT_bins)
+        self.surplus_bins = np.linspace(-25, 25, surplus_bins)
 
         # --- Exploration & visit-counts ---
         self.visit_counts = {}  # key: (s_key, a_key) -> int

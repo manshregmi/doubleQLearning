@@ -1,93 +1,78 @@
-import random
-from profiling.initialize_profiling import get_profiling_data
+import os
+import numpy as np
 import matplotlib.pyplot as plt
-from reference_schedulers.random_scheduler import run_random_scheduler
+from itertools import product
+from profiling.initialize_profiling import get_profiling_data
 from simulator.a2c_simulator import run_a2c_simulation
 from simulator.doubleQ_simulator import run_simulation
 from simulator.sac_simulator import run_sac_simulation
-import numpy as np
 
+def clean_up_files():
+    """Deletes existing model/table files to ensure fresh training each iteration."""
+    files = ["q_tables.pkl", "sac_model_ep500.pth", "value_table.npy", "policy_table.npy"]
+    for f in files:
+        if os.path.exists(f):
+            os.remove(f)
+
+def run_bin_analysis():
+    # Simulation Parameters
+    train_episodes = 500
+    test_episodes = 100
+    max_steps = 10
+    target_deadline = 500 
+    profiling_data = get_profiling_data(target_deadline)
+
+    # Bin Ranges (Adjust as needed)
+    bw_bin_range = [5, 10, 15]
+    ct_bin_range = [5, 10, 20]
+    surplus_bin_range = [5, 15, 25]
+
+    combinations = list(product(bw_bin_range, ct_bin_range, surplus_bin_range))
+    results_matrix = []
+
+    for (bw, ct, surp) in combinations:
+        print(f"\n>>> Analyzing Combination: BW={bw}, CT={ct}, Surplus={surp}")
+        
+        # --- PHASE 1: TRAINING ---
+        # Ensure your simulators handle training when is_test=False
+        run_simulation(profiling_data, train_episodes, max_steps, is_test=False, 
+                       BW_bins=bw, CT_bins=ct, surplus_bins=surp)
+        run_a2c_simulation(profiling_data, train_episodes, max_steps, is_test=False, 
+                           BW_bins=bw, CT_bins=ct, surplus_bins=surp)
+        run_sac_simulation(profiling_data, train_episodes, max_steps, is_test=False, 
+                           BW_bins=bw, CT_bins=ct, surplus_bins=surp)
+
+        # --- PHASE 2: TESTING ---
+        # Evaluate performance using the weights/tables trained above
+        dq_e, _ = run_simulation(profiling_data, test_episodes, max_steps, is_test=True, 
+                                 BW_bins=bw, CT_bins=ct, surplus_bins=surp)
+        a2c_e, _ = run_a2c_simulation(profiling_data, test_episodes, max_steps, is_test=True, 
+                                      BW_bins=bw, CT_bins=ct, surplus_bins=surp)
+        sac_e, _ = run_sac_simulation(profiling_data, test_episodes, max_steps, is_test=True, 
+                                      BW_bins=bw, CT_bins=ct, surplus_bins=surp)
+
+        # Store test results
+        results_matrix.append([bw, ct, surp, dq_e, a2c_e, sac_e])
+        
+        # --- CLEANUP ---
+        clean_up_files()
+
+    # Final Plotting Logic (3D Scatter)
+    results_matrix = np.array(results_matrix)
+    plot_results(results_matrix)
+
+def plot_results(data):
+    fig = plt.figure(figsize=(15, 5))
+    algos = [("Double Q", 3), ("A2C", 4), ("SAC", 5)]
+    for i, (name, col) in enumerate(algos, 1):
+        ax = fig.add_subplot(1, 3, i, projection='3d')
+        img = ax.scatter(data[:,0], data[:,1], data[:,2], c=data[:,col], cmap='viridis_r', s=80)
+        ax.set_title(f"Test Energy: {name}")
+        ax.set_xlabel('BW'); ax.set_ylabel('CT'); ax.set_zlabel('Surplus')
+        fig.colorbar(img, ax=ax, shrink=0.5)
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
-    is_test = True
-    episodes = 1000
-    # episodes = 1
-    max_steps = 10
-    deadlines = list(range(350,505,5 ))  # 1ms to 700ms
-    
-    dq_energy, dq_time = [], []
-    a2c_energy, a2c_time = [], []
-    sac_energy, sac_time = [], []
-    random_energy, random_time = [], []   
-    edge_energy, edge_time = [], []
-    cloud_energy, cloud_time = [], []
-
-    for d in deadlines:
-        print("Running simulations for deadline: {} ms".format(d))
-        profiling_data = get_profiling_data(d)
-
-        e, t = run_simulation(profiling_data, episodes, max_steps, is_test)
-        dq_energy.append(e)
-        dq_time.append(t)
-        
-    
-        a2c_e, a2c_t = run_a2c_simulation(profiling_data, episodes, max_steps, is_test)
-        a2c_energy.append(a2c_e)
-        a2c_time.append(a2c_t)
-
-        # sac_e, sac_t = run_sac_simulation(profiling_data, episodes, max_steps, is_test)
-        # sac_energy.append(sac_e)
-        # sac_time.append(sac_t)
-
-        # re, rt = run_random_scheduler(profiling_data, episodes, max_steps, is_random=True, is_all_cloud=False)
-        # random_energy.append(re)
-        # random_time.append(rt)
-
-        # ee, et = run_random_scheduler(profiling_data, episodes, max_steps, is_random=False, is_all_cloud=False)
-        # edge_energy.append(ee)
-        # edge_time.append(et)
-
-        # ce, ct = run_random_scheduler(profiling_data, episodes, max_steps, is_random=False, is_all_cloud=True)
-        # cloud_energy.append(ce)
-        # cloud_time.append(ct)
-
-    # Plot Energy vs Deadline
-    plt.figure(figsize=(8, 6))
-    plt.plot(deadlines, dq_energy, label="Double Q", marker='o')
-    plt.plot(deadlines, a2c_energy, label="A2C", marker='*')
-    # plt.plot(deadlines, sac_energy, label="SAC", marker='s')
-    # plt.plot(deadlines, random_energy, label="Random", marker='+')
-    # plt.plot(deadlines, edge_energy, label="All Edge", marker='x')
-    # plt.plot(deadlines, cloud_energy, label="All Cloud", marker='^')
-    plt.xlabel("Deadline (ms)")
-    plt.ylabel("Average Energy (Joules)")
-    plt.title("Average Energy vs Deadline")
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.tight_layout()
-    plt.show()
-
-    # Plot Completion Time vs Deadline
-    plt.figure(figsize=(8, 6))
-    plt.plot(deadlines, dq_time, label="Double Q", marker='o')
-    plt.plot(deadlines, a2c_time, label="A2C", marker='*')
-    # plt.plot(deadlines, sac_time, label="SAC", marker='s')
-    # plt.plot(deadlines, random_time, label="Random", marker='+')
-    # plt.plot(deadlines, edge_time, label="All Edge", marker='x')
-    # plt.plot(deadlines, cloud_time, label="All Cloud", marker='^')
-    plt.xlabel("Deadline (ms)")
-    plt.ylabel("Average Completion Time (ms)")
-    plt.title("Average Completion Time vs Deadline")
-    plt.legend()
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.tight_layout()
-    plt.show()
-
-
-    print("Simulations completed.")
-    # print("all cloud energy", np.mean(cloud_energy), "cloud time", np.mean(cloud_time))
-    # print("all edge energy", np.mean(edge_energy))
-    print("dq energy", np.mean(dq_energy))
-    print("a2c energy", np.mean(a2c_energy))
-    # print("sac energy", np.mean(sac_energy))
-    # print("random energy", np.mean(random_energy))
+    clean_up_files()
+    run_bin_analysis()

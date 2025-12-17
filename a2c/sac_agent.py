@@ -101,6 +101,9 @@ class SoftActorCriticAgent:
         batch_size: int = 256,
         auto_entropy: bool = True,
         target_entropy_scale: float = 0.98,  # -0.98 * log(1/num_actions)
+        BW_bins: int = 15,
+        CT_bins: int = 20,
+        surplus_bins: int = 25,
     ):
         """
         Args:
@@ -124,10 +127,10 @@ class SoftActorCriticAgent:
         self.auto_entropy = auto_entropy
         
         # Discretization bins (same as before)
-        self.bandwidth_bins = np.linspace(1, 15, 15)
-        self.cloudtime_bins = np.linspace(0, 100, 20)
-        self.surplus_bins = np.linspace(-25, 25, 25)
-        
+        self.bandwidth_bins = np.linspace(1, 15, BW_bins)
+        self.cloudtime_bins = np.linspace(0, 100, CT_bins)
+        self.surplus_bins = np.linspace(-25, 25, surplus_bins)
+
         # State dimension after discretization
         self.state_dim = 6  # [bw_disc, ctime_disc, layer, surplus_disc, neg_count, prev_action_encoded]
         

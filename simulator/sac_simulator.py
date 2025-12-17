@@ -15,7 +15,10 @@ def run_sac_simulation(
     model_path: str = "sac_models.pth",
     collect_stats: bool = True,
     visualize: bool = False,
-    training_config: Dict = None
+    training_config: Dict = None,
+    BW_bins: int = 15,
+    CT_bins: int = 20,
+    surplus_bins: int = 25
 ) -> Tuple[float, float, Dict[str, Any]]:
     """
     Run SAC simulation for computational offloading.
@@ -59,7 +62,10 @@ def run_sac_simulation(
         hidden_dim=training_config['hidden_dim'],
         buffer_size=training_config['buffer_size'],
         batch_size=training_config['batch_size'],
-        auto_entropy=training_config['auto_entropy']
+        auto_entropy=training_config['auto_entropy'],
+        BW_bins=BW_bins,
+        CT_bins=CT_bins,
+        surplus_bins=surplus_bins
     )
     
     # Load pre-trained model if specified
