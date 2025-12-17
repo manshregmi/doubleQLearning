@@ -11,7 +11,7 @@ State = namedtuple('State', ['bandwidth', 'cloud_time', 'layer', 'prev_action', 
 # --- A2C SIMULATION RUNNER ---
 # --- A2C SIMULATION RUNNER ---
 
-def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=20):
+def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=20, is_test=False):
     """
     Runs the Tabular Actor-Critic (A2C) training loop.
     A2C is an on-policy algorithm, meaning updates happen instantly after each step.
@@ -21,7 +21,7 @@ def run_a2c_simulation(profiling_data: ProfilingData, episodes=10000, max_steps=
     and policy/value updates in a single step for on-policy learning.
     """
     # 1. Initialization
-    agent = A2CAgent(profiling_data, is_test=True)
+    agent = A2CAgent(profiling_data, is_test=is_test)
     # The simulator object is initialized here, but the agent's internal 
     # 'train' method is responsible for using it for interaction.
     
