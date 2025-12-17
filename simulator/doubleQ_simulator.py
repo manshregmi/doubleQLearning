@@ -5,8 +5,7 @@ import matplotlib.pyplot as plt
 from collections import defaultdict
 import time
 
-def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20):
-    is_test = True
+def run_simulation(profiling_data: ProfilingData, episodes=1, max_steps=20, is_test=False):
     agent = DoubleQLearningAgent(profiling_data, is_test=is_test)
     edge_energy = []
     completion_time = []
