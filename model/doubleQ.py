@@ -306,6 +306,7 @@ class DoubleQLearningAgent:
                 next_state[0],
                 surplus,
                 fractional_deadline,
+                negative_surplus_count
             )
 
         # -------------------
@@ -358,6 +359,7 @@ class DoubleQLearningAgent:
             next_state[0],
             surplus,
             fractional_deadline,
+            negative_surplus_count,
         )
 
     # ---------------------------
@@ -365,26 +367,72 @@ class DoubleQLearningAgent:
     # ---------------------------
     def notify_episode_end(self, episode_reward: float):
         """
-        Call this at the end of each training episode with the cumulative episode reward.
-
-        This method:
-        - updates best_episode_reward & episodes_since_improvement
-        - boosts epsilon if stuck
-        - otherwise applies slow decay (already applied per-step as small fallback)
+        More aggressive epsilon adjustment for faster learning.
         """
         if episode_reward > self.best_episode_reward + 1e-9:
             self.best_episode_reward = episode_reward
             self.episodes_since_improvement = 0
+            # Good reward: reduce epsilon slowly
+            self.epsilon = max(self.epsilon_min, self.epsilon * 0.995)
         else:
             self.episodes_since_improvement += 1
+            
+            # If stuck for too long, boost exploration more aggressively
+            if self.episodes_since_improvement >= self.stagnant_limit // 2:  # More frequent boost
+                self.epsilon = min(0.8, self.epsilon + 0.3)  # Boost more
+                self.episodes_since_improvement = 0
+                print(f"  Epsilon boosted to {self.epsilon:.3f} due to stagnation")
+            else:
+                # Normal decay
+                self.epsilon = max(self.epsilon_min, self.epsilon * 0.999)
 
-        if self.episodes_since_improvement >= self.stagnant_limit:
-            # boost exploration and reset the counter
-            self.epsilon = max(self.epsilon, self.epsilon_boost)
-            self.episodes_since_improvement = 0
-
-        # Also apply decay but keep above epsilon_min
-        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
+    def _update_trajectory_q_values(self, trajectory):
+        """
+        Update Q-values using Monte Carlo returns from trajectory.
+        """
+        if not trajectory:
+            return
+        
+        # Calculate Monte Carlo returns
+        returns = 0.0
+        
+        for i in reversed(range(len(trajectory))):
+            step = trajectory[i]
+            reward = step['reward']
+            
+            # Calculate return
+            returns = reward + self.gamma * returns
+            
+            # Clip returns to prevent explosion
+            returns = np.clip(returns, -1000.0, 1000.0)
+            
+            state_key = step['state_key']
+            action_key = step['action_key']
+            full_key = (state_key, action_key)
+            
+            # Double Q-learning update
+            if random.random() < 0.5:
+                q_table, q_eval = self.Q1, self.Q2
+            else:
+                q_table, q_eval = self.Q2, self.Q1
+            
+            # Ensure optimistic initialization
+            if full_key not in q_table:
+                q_table[full_key] = self.optimistic_init_value
+            if full_key not in q_eval:
+                q_eval[full_key] = self.optimistic_init_value
+            
+            # Get current Q-value
+            current_q = q_table[full_key]
+            
+            # Monte Carlo update
+            new_q = current_q + self.alpha * (returns - current_q)
+            
+            # CRITICAL: Clip Q-values to prevent explosion
+            q_table[full_key] = np.clip(new_q, -100.0, 100.0)
+            
+            # Update visit counts
+            self._increment_visit(state_key, action_key)
 
     # ---------------------------
     # Persistence
