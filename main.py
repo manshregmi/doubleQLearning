@@ -30,17 +30,17 @@ if __name__ == "__main__":
         e, t, dm = run_simulation(profiling_data, episodes, max_steps, is_test)
         dq_energy.append(e)
         dq_time.append(t)
-        dq_deadline_misses.append(dm)
+        dq_deadline_misses.append(dm/episodes)
 
         a2c_e, a2c_t, a2c_dm = run_a2c_simulation(profiling_data, episodes, max_steps, is_test)
         a2c_energy.append(a2c_e)
         a2c_time.append(a2c_t)
-        a2c_deadline_misses.append(a2c_dm)
+        a2c_deadline_misses.append(a2c_dm/episodes)
 
         cg_a2c_e, cg_a2c_t, cg_a2c_dm = run_a2c_episode_level(profiling_data, episodes, max_steps, is_test)
         cg_a2c_energy.append(cg_a2c_e)
         cg_a2c_time.append(cg_a2c_t)
-        cg_a2c_deadline_misses.append(cg_a2c_dm)
+        cg_a2c_deadline_misses.append(cg_a2c_dm/episodes)
 
         # sac_e, sac_t = run_sac_simulation(profiling_data, episodes, max_steps, is_test)
         # sac_energy.append(sac_e)
@@ -83,7 +83,7 @@ if __name__ == "__main__":
     # plt.plot(deadlines, edge_energy, label="All Edge", marker='x')
     # plt.plot(deadlines, cloud_energy, label="All Cloud", marker='^')
     plt.xlabel("Deadline (ms)")
-    plt.ylabel("Deadline Misses")
+    plt.ylabel("Deadline Misses (%)")
     plt.title("Deadline Misses vs Deadline")
     plt.legend()
     plt.grid(True, linestyle="--", alpha=0.6)
@@ -98,31 +98,31 @@ if __name__ == "__main__":
     print("Coarse-Grained A2C Energy:", cg_a2c_energy)  
 
 
-# ======================================================
-    energies = np.array([dq_energy, a2c_energy, edge_energy, cloud_energy, cg_a2c_energy])
+    # ======================================================
+    # ======================================================
+    deadline_idx = deadlines.index(450)  # index of 450 ms
+
+    energies_450 = [
+        dq_energy[deadline_idx],
+        a2c_energy[deadline_idx],
+        edge_energy[deadline_idx],
+        cloud_energy[deadline_idx],
+        cg_a2c_energy[deadline_idx]
+    ]
 
     labels = ['DQ', 'A2C', 'AllU', 'AllC', 'Coarse A2C']
 
-    x = np.arange(len(deadlines))  # the label locations
-    width = 0.15  # width of the bars
+    x = np.arange(len(labels))
+    width = 0.6
 
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(8, 6))
+    plt.bar(x, energies_450, width)
 
-    # Plot each scheduler's bar, offsetting them by width
-    for i in range(len(labels)):
-        plt.bar(x + i*width, energies[i], width, label=labels[i])
-
-    # Set x-axis ticks in the middle of each group
-    plt.xticks(x + 2*width, [f'Deadline {d} ms' for d in deadlines])
-
+    plt.xticks(x, labels)
     plt.ylabel("Average Energy (Joules)")
-    plt.title("Average Energy for Different Schedulers by Deadline")
-    plt.legend()
+    plt.title("Average Energy for Different Schedulers (Deadline = 450 ms)")
     plt.grid(axis='y', linestyle='--', alpha=0.6)
 
     plt.tight_layout()
-
-    # Save high-resolution figure
-    plt.savefig("energy_bargraph.png", dpi=600)  # 600 dpi for publication quality
-
+    plt.savefig("energy_bargraph_450ms.png", dpi=600)
     plt.show()

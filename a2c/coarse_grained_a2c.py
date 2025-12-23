@@ -137,7 +137,7 @@ class EpisodeActorCriticAgent:
 
         for layer_idx, action in enumerate(joint_action):
             next_cloud = self.simulator.get_next_state_cloud_waiting_time(
-                next_layer=layer_idx + 1,
+                next_layer=layer_idx,
                 current_action=action,
                 isAllCloud=False,
             )
@@ -251,6 +251,8 @@ def run_a2c_episode_level(profiling_data: ProfilingData, episodes=1000, max_per_
 
         # Apply same reward shaping as double Q
         modified_total_reward = sum(step["reward"] for step in trajectory)
+        if (total_time > profiling_data.deadline):
+            modified_total_reward += -10000000
 
         if not is_test:
             agent.update_from_trajectory(trajectory)
