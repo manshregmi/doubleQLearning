@@ -1,7 +1,6 @@
 from model.doubleQ import DoubleQLearningAgent
 from profiling.profile import ProfilingData
 import numpy as np
-import time
 from collections import defaultdict
 
 
@@ -23,9 +22,6 @@ def run_simulation(
     deadline_missed_count = 0
     deadline_met_count = 0
     layer_violation_stats = defaultdict(int)
-
-    start_time = time.time()
-    print(f"Starting simulation at: {start_time}")
 
     for ep in range(episodes):
 

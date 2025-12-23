@@ -13,7 +13,7 @@ if __name__ == "__main__":
     episodes = 1000
     # episodes = 1
     max_steps = 10
-    deadlines = list(range(400,505,50 ))  # 400ms to 500ms
+    deadlines = list(range(400,405,50 ))  # 400ms to 500ms
     
     dq_energy, dq_time, dq_deadline_misses = [], [], []
     a2c_energy, a2c_time, a2c_deadline_misses = [], [], []

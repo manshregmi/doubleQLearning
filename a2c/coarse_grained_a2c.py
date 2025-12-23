@@ -227,7 +227,7 @@ class EpisodeActorCriticAgent:
                     data = pickle.load(f)
                     if isinstance(data, tuple) and len(data) == 3:
                         self.policy_table, self.value_table, self.visit_counts = data
-                print(f"A2C tables loaded from {filename}")
+                print(f"Corase grained A2C tables loaded from {filename}")
         except Exception as e:
             print(f"Error loading tables: {e}")
 

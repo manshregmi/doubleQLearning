@@ -244,3 +244,4 @@ class TabularActorCriticAgent:
         if os.path.exists(file):
             with open(file, "rb") as f:
                 self.policy_table, self.value_table = pickle.load(f)
+            print(f"A2C tables loaded from {file}")
