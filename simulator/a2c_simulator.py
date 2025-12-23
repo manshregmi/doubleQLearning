@@ -126,6 +126,7 @@ def run_a2c_simulation(
         completion_time.append(total_time)
         rewards.append(total_reward)
         cumulative_rewards.append(modified_reward)
+    agent.save()
 
     return (
         np.mean(edge_energy),
