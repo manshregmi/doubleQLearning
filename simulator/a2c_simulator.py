@@ -18,19 +18,19 @@ def run_a2c_simulation(
     completion_time = []
     rewards = []
     cumulative_rewards = []
+    episode_computation_time = []
 
     deadline_missed_count = 0
     deadline_met_count = 0
     layer_violation_stats = defaultdict(int)
 
-    start_time = time.time()
-    print(f"Starting A2C simulation at: {start_time}")
 
     for ep in range(episodes):
 
         total_energy = 0.0
         total_time = 0.0
         total_reward = 0.0
+        total_computation_time = 0.0
 
         cloud_time = 0.0
         current_state = (profiling_data.bandwidth, cloud_time, 0, None, 0, 0)
@@ -53,7 +53,9 @@ def run_a2c_simulation(
                 surplus,
                 fractional_deadline,
                 neg_count,
+                computation_time,
             ) = agent.train(current_state)
+            total_computation_time += computation_time
 
             prev_neg = current_state[5]
             neg_increased = neg_count > prev_neg
@@ -80,7 +82,8 @@ def run_a2c_simulation(
 
             if terminal:
                 break
-
+        
+        episode_computation_time.append(total_computation_time)
         # ==================================================
         # Deadline reward reshaping (IDENTICAL)
         # ==================================================
@@ -124,22 +127,9 @@ def run_a2c_simulation(
         rewards.append(total_reward)
         cumulative_rewards.append(modified_reward)
 
-        if ep < 5 or (ep + 1) % 50 == 0:
-            print(
-                f"Episode {ep+1}/{episodes} | "
-                f"Time={total_time:.1f}ms | "
-                f"Energy={total_energy:.2f}J | "
-                f"{'MISS' if deadline_violated else 'MET '} | "
-                f"Reward={modified_reward:.2f}"
-            )
-
-    agent.save()
-
-    print("\nSuccess rate:",
-          100 * deadline_met_count / episodes, "%")
-
     return (
         np.mean(edge_energy),
         np.mean(completion_time),
         deadline_missed_count,
+        episode_computation_time
     )

@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import random
 import pickle
@@ -253,7 +254,10 @@ class DoubleQLearningAgent:
             (action, reward, next_state, terminal, energy, completion_time, next_bandwidth, surplus, fractional_deadline)
         """
         # Choose action (deterministic if test)
+        start_time  = time.time()
         action = self.choose_action(current_state)
+        end_time = time.time()
+        computation_time = end_time - start_time
         self.is_optimum_action(action, int(current_state[2]))
 
         # Count visit for exploration bonus (training only)
@@ -306,7 +310,8 @@ class DoubleQLearningAgent:
                 next_state[0],
                 surplus,
                 fractional_deadline,
-                negative_surplus_count
+                negative_surplus_count,
+                computation_time
             )
 
         # -------------------
@@ -360,6 +365,7 @@ class DoubleQLearningAgent:
             surplus,
             fractional_deadline,
             negative_surplus_count,
+            computation_time
         )
 
     # ---------------------------

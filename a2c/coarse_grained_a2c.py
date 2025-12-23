@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import random
 import pickle
@@ -241,12 +242,19 @@ def run_a2c_episode_level(profiling_data: ProfilingData, episodes=1000, max_per_
     completion_time = []
     rewards = []
     cumulative_rewards = []
+    episode_computation_time = []
     deadline_missed = 0
 
     for ep in range(episodes):
         joint_actions = agent.build_joint_action_space(max_per_layer)
+
         state_key = agent._state_to_key((profiling_data.bandwidth, 0, 0, None, 0, 0))
+
+        start_time = time.time()
         action = agent.choose_joint_action(state_key, joint_actions)
+        end_time = time.time()
+        computation_time = end_time - start_time
+        episode_computation_time.append(computation_time)
         trajectory, total_energy, total_time = agent.rollout_episode(action)
 
         # Apply same reward shaping as double Q
@@ -263,22 +271,7 @@ def run_a2c_episode_level(profiling_data: ProfilingData, episodes=1000, max_per_
         rewards.append(sum(step["reward"] for step in trajectory))
         cumulative_rewards.append(modified_total_reward)
 
-        if ep < 5 or (ep + 1) % 50 == 0:
-            status = "MISS" if total_time > profiling_data.deadline else "MET "
-            print(
-                f"Episode {ep+1}/{episodes} | "
-                f"Time={total_time:.1f}ms ({status}) | "
-                f"Energy={total_energy:.2f}J | "
-                f"Reward={modified_total_reward:.2f} | "
-                f"Temp={agent.temperature:.3f}"
-            )
-
     agent.save_tables()
 
-    print("\nSimulation summary:")
-    print(f"Average Energy: {np.mean(edge_energy):.2f} J")
-    print(f"Average Completion Time: {np.mean(completion_time):.1f} ms")
-    print(f"Average Reward: {np.mean(cumulative_rewards):.2f}")
-    
 
-    return np.mean(edge_energy), np.mean(completion_time), deadline_missed
+    return np.mean(edge_energy), np.mean(completion_time), deadline_missed , episode_computation_time

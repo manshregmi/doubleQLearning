@@ -18,6 +18,7 @@ def run_simulation(
     completion_time = []
     rewards = []
     cumulative_rewards = []
+    episode_computation_time = []
 
     deadline_missed_count = 0
     deadline_met_count = 0
@@ -31,6 +32,7 @@ def run_simulation(
         total_energy = 0.0
         total_time = 0.0
         total_reward = 0.0
+        total_computation_time = 0.0
 
         cloud_time = 0.0
         current_state = (profiling_data.bandwidth, cloud_time, 0, None, 0, 0)
@@ -57,7 +59,9 @@ def run_simulation(
                 surplus,
                 fractional_deadline,
                 negative_surplus_count,
+                computation_time,
             ) = agent.train(current_state)
+            total_computation_time += computation_time 
 
             # Compute boolean flag required by agent
             prev_negative_surplus = current_state[5]
@@ -92,6 +96,9 @@ def run_simulation(
 
             if terminal:
                 break
+
+        episode_computation_time.append(total_computation_time)
+
 
         # ==========================================================
         # Compute reward scale from YOUR reward function
@@ -190,59 +197,11 @@ def run_simulation(
         rewards.append(total_reward)
         cumulative_rewards.append(modified_total_reward)
 
-        if ep < 5 or (ep + 1) % 50 == 0:
-            status = "MISS" if deadline_violated else "MET "
-            print(
-                f"Episode {ep+1:4d}/{episodes} | "
-                f"Time={total_time:6.1f}ms ({status}) | "
-                f"Energy={total_energy:6.2f}J | "
-                f"Reward={modified_total_reward:7.2f} | "
-                f"ε={agent.epsilon:.3f}"
-            )
     agent.save_qtables()
-
-    # ==========================================================
-    # Simulation summary
-    # ==========================================================
-    print("\n" + "=" * 70)
-    print("SIMULATION SUMMARY")
-    print("=" * 70)
-    print(f"Total Episodes: {episodes}")
-    print(f"Deadline: {profiling_data.deadline} ms")
-    print(
-        f"Success Rate: "
-        f"{100 * deadline_met_count / episodes:.1f}% "
-        f"({deadline_met_count}/{episodes})"
-    )
-    print("-" * 70)
-    print(
-        f"Completion Time: {np.mean(completion_time):.1f} ± "
-        f"{np.std(completion_time):.1f} ms"
-    )
-    print(
-        f"Energy: {np.mean(edge_energy):.2f} ± "
-        f"{np.std(edge_energy):.2f} J"
-    )
-    print(
-        f"Original Reward: {np.mean(rewards):.2f} ± "
-        f"{np.std(rewards):.2f}"
-    )
-    print(
-        f"Modified Reward: {np.mean(cumulative_rewards):.2f} ± "
-        f"{np.std(cumulative_rewards):.2f}"
-    )
-
-    if layer_violation_stats:
-        print("\nLayer Violation Stats:")
-        for layer in sorted(layer_violation_stats):
-            print(
-                f"  Layer {layer}: {layer_violation_stats[layer]} violations"
-            )
-
-    print("=" * 70)
 
     return (
         np.mean(edge_energy),
         np.mean(completion_time),
         deadline_missed_count,
+        episode_computation_time
     )

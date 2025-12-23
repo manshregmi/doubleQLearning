@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import random
 import pickle
@@ -133,7 +134,12 @@ class TabularActorCriticAgent:
     # ======================================================
     def train(self, current_state):
 
+        start_time = time.time()
+    
         action = self.choose_action(current_state)
+
+        end_time = time.time()
+        computation_time = end_time - start_time
 
         next_cloud = self.simulator.get_next_state_cloud_waiting_time(
             next_layer=min(int(current_state[2]) + 1, len(self.profiling.layers) - 1),
@@ -176,6 +182,7 @@ class TabularActorCriticAgent:
             surplus,
             fractional_deadline,
             neg_count,
+            computation_time,
         )
 
     # ======================================================
