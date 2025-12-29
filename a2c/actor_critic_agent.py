@@ -36,7 +36,7 @@ class TabularActorCriticAgent:
         self.simulator = CloudEdgeSimulator(profiling_data)
 
         # SAME discretization scale as Double-Q
-        self.bandwidth_bins = np.linspace(1, 15, 15)
+        self.bandwidth_bins = np.linspace(1, 15, 60)
         self.cloudtime_bins = np.linspace(0, 100, 20)
         self.surplus_bins = np.linspace(-25, 25, 25)
 

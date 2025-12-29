@@ -5,10 +5,9 @@ from profiling.profile import ProfilingData
 import pickle
 import os
 
-
-class OneShotActorCriticWrapper:
+class OneShotDoubleQLearningWrapper:
     """
-    Wrapper for one-shot Actor-Critic that returns metrics for plotting.
+    Wrapper for one-shot Double Q-learning that returns metrics for plotting.
     Returns: (avg_energy, avg_time, deadline_miss_count)
     """
     
@@ -20,10 +19,10 @@ class OneShotActorCriticWrapper:
         self.initial_bandwidth = profiling.bandwidth
         self.current_bandwidth = profiling.bandwidth
         self.current_cloud_time = 0.0
-        self.current_slack = 0.0  # Initial slack
+        self.current_slack = 0.0  # Initial slack (completion_time - deadline)
         
-        # Discretization - Now 3D state space
-        self.bw_bins = np.linspace(1, 15, 60)
+        # Discretization - Now 3D state space (bw, cloud_time, slack)
+        self.bw_bins = np.linspace(1, 15, 15)
         self.cloud_bins = np.linspace(0, 300, 25)
         self.slack_bins = np.linspace(-100, 100, 20)  # Slack from -100ms to +100ms
         
@@ -35,37 +34,34 @@ class OneShotActorCriticWrapper:
         self.num_actions = self._calculate_total_actions()
         self._precompute_action_vectors()
         
-        # Actor-Critic parameters
-        self.actor_lr = 0.01
-        self.critic_lr = 0.1
+        # Q-tables - Now 3D (bw, cloud, slack, actions)
+        self.Q1 = np.ones((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins, self.num_actions))
+        self.Q2 = np.ones((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins, self.num_actions))
+        
+        # RL parameters
+        self.alpha = 0.1
         self.gamma = 0.95
         self.epsilon = 1.0
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.9995
         
-        # Policy and value function - Now 3D
-        self.policy = np.ones((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins, self.num_actions))
-        self.policy /= self.num_actions  # Uniform initialization
-        self.V = np.zeros((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins))
-        
         # Episode tracking
         self.episode_count = 0
-
-        
-    def save_qtables(self, filename: str = "one_shot_a2c.pkl"):
+    
+    def save_qtables(self, filename: str = "one_shot_DQ.pkl"):
         """
-        Save Actor-Critic policy and value function.
+        Save Double Q-learning Q-tables and training state.
         """
         try:
             with open(filename, "wb") as f:
-                pickle.dump((self.policy, self.V, self.epsilon, self.episode_count), f)
-            print(f"Actor-Critic model saved to {filename}")
+                pickle.dump((self.Q1, self.Q2, self.epsilon, self.episode_count), f)
+            print(f"Double Q-learning Q-tables saved to {filename}")
         except Exception as e:
-            print(f"Error saving Actor-Critic model: {e}")
+            print(f"Error saving Double Q-learning Q-tables: {e}")
 
-    def load_qtables(self, filename: str = "one_shot_a2c.pkl"):
+    def load_qtables(self, filename: str = "one_shot_DQ.pkl"):
         """
-        Load Actor-Critic policy and value function.
+        Load Double Q-learning Q-tables and training state.
         """
         try:
             if os.path.exists(filename):
@@ -73,36 +69,30 @@ class OneShotActorCriticWrapper:
                     data = pickle.load(f)
                     
                 if isinstance(data, tuple) and len(data) == 4:
-                    self.policy, self.V, self.epsilon, self.episode_count = data
-                    # Check if shapes match
-                    if (self.policy.shape != (self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins, self.num_actions) or
-                        self.V.shape != (self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins)):
-                        print("Warning: Loaded model shapes don't match current configuration. Resetting.")
-                        self.policy = np.ones((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins, self.num_actions)) / self.num_actions
-                        self.V = np.zeros((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins))
+                    self.Q1, self.Q2, self.epsilon, self.episode_count = data
                 else:
-                    # Backwards compatibility - handle old format
-                    print("Old format detected. Resetting model to new 3D format.")
-                    self.policy = np.ones((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins, self.num_actions)) / self.num_actions
-                    self.V = np.zeros((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins))
+                    # Backwards compatibility - handle old 2D Q-tables
+                    self.Q1, self.Q2 = data
+                    # Reshape if needed (old format to new 3D format)
+                    if len(self.Q1.shape) == 3:  # Old: (bw, cloud, actions)
+                        old_shape = self.Q1.shape
+                        new_shape = (old_shape[0], old_shape[1], self.num_slack_bins, old_shape[2])
+                        self.Q1 = np.ones(new_shape)
+                        self.Q2 = np.ones(new_shape)
                     self.epsilon = 1.0
                     self.episode_count = 0
                 
-                print(f"Actor-Critic model loaded from {filename}")
-                print(f"  Policy shape: {self.policy.shape}, V shape: {self.V.shape}")
+                print(f"Double Q-learning Q-tables loaded from {filename}")
+                print(f"  Q1 shape: {self.Q1.shape}, Q2 shape: {self.Q2.shape}")
                 print(f"  Episode count: {self.episode_count}, Epsilon: {self.epsilon:.4f}")
                 return True
             else:
-                print(f"Actor-Critic model file not found at {filename}. Starting fresh.")
+                print(f"Double Q-learning Q-table file not found at {filename}. Starting fresh.")
                 return False
-        except (EOFError, pickle.UnpicklingError) as e:
-            print(f"Error loading Actor-Critic model (corrupted file): {e}")
-            print("Starting with fresh model.")
-            return False
         except Exception as e:
-            print(f"Error loading Actor-Critic model: {e}")
-            return False
-    
+            print(f"Error loading Double Q-learning Q-tables: {e}")
+            return False    
+        
     def _calculate_total_actions(self) -> int:
         total = 1
         for layer_idx, layer in enumerate(self.profiling.layers):
@@ -173,63 +163,39 @@ class OneShotActorCriticWrapper:
         else:
             return self.current_bandwidth, self.current_cloud_time, self.current_slack
     
-    def choose_action(self, bandwidth: float, cloud_time: float, slack: float) -> Tuple[int, np.ndarray]:
+    def choose_action(self, bandwidth: float, cloud_time: float, slack: float) -> int:
         """
-        Choose action using epsilon-greedy policy with softmax probabilities.
+        Choose action using epsilon-greedy policy based on current state.
         """
         bw_idx, cloud_idx, slack_idx = self.discretize_state(bandwidth, cloud_time, slack)
         
         if random.random() < self.epsilon:
-            action_id = random.randint(0, self.num_actions - 1)
-            action_probs = np.ones(self.num_actions) / self.num_actions
+            return random.randint(0, self.num_actions - 1)
         else:
-            action_probs = self.policy[bw_idx, cloud_idx, slack_idx].copy()
-            # Ensure valid probability distribution
-            if np.any(action_probs < 0) or np.sum(action_probs) <= 0:
-                action_probs = np.ones(self.num_actions) / self.num_actions
-            else:
-                # Add small noise for exploration
-                action_probs = action_probs * 0.99 + 0.01 / self.num_actions
-                action_probs = action_probs / np.sum(action_probs)  # Renormalize
-            
-            action_id = np.random.choice(self.num_actions, p=action_probs)
-        
-        return action_id, action_probs
+            Q_avg = (self.Q1[bw_idx, cloud_idx, slack_idx] + self.Q2[bw_idx, cloud_idx, slack_idx]) / 2
+            return np.argmax(Q_avg)
     
-    def update(self, state_bw: float, state_cloud: float, state_slack: float,
-               action_id: int, action_probs: np.ndarray, reward: float, 
+    def update(self, state_bw: float, state_cloud: float, state_slack: float, 
+               action_id: int, reward: float, 
                next_bw: float, next_cloud: float, next_slack: float):
         """
-        Update Actor-Critic using TD error.
+        Update Q-tables using Double Q-learning update rule.
         """
         bw_idx, cloud_idx, slack_idx = self.discretize_state(state_bw, state_cloud, state_slack)
         next_bw_idx, next_cloud_idx, next_slack_idx = self.discretize_state(next_bw, next_cloud, next_slack)
         
-        # TD error
-        td_target = reward + self.gamma * self.V[next_bw_idx, next_cloud_idx, next_slack_idx]
-        td_error = td_target - self.V[bw_idx, cloud_idx, slack_idx]
-        
-        # Update critic (value function)
-        self.V[bw_idx, cloud_idx, slack_idx] += self.critic_lr * td_error
-        
-        # Update actor (policy) - using REINFORCE with baseline
-        grad_log = np.zeros(self.num_actions)
-        grad_log[action_id] = 1.0 - action_probs[action_id]
-        for a in range(self.num_actions):
-            if a != action_id:
-                grad_log[a] = -action_probs[a]
-        
-        # Apply update
-        self.policy[bw_idx, cloud_idx, slack_idx] += self.actor_lr * td_error * grad_log
-        
-        # Normalize policy to be a valid probability distribution
-        self.policy[bw_idx, cloud_idx, slack_idx] = np.clip(self.policy[bw_idx, cloud_idx, slack_idx], 1e-8, 1.0)
-        policy_sum = np.sum(self.policy[bw_idx, cloud_idx, slack_idx])
-        if policy_sum > 0:
-            self.policy[bw_idx, cloud_idx, slack_idx] /= policy_sum
+        # Randomly choose which Q-table to update
+        if random.random() < 0.5:
+            Q_update, Q_eval = self.Q1, self.Q2
         else:
-            # Reset to uniform if something went wrong
-            self.policy[bw_idx, cloud_idx, slack_idx] = np.ones(self.num_actions) / self.num_actions
+            Q_update, Q_eval = self.Q2, self.Q1
+        
+        current_q = Q_update[bw_idx, cloud_idx, slack_idx, action_id]
+        best_next_action = np.argmax(Q_update[next_bw_idx, next_cloud_idx, next_slack_idx])
+        next_q = Q_eval[next_bw_idx, next_cloud_idx, next_slack_idx, best_next_action]
+        
+        target = reward + self.gamma * next_q
+        Q_update[bw_idx, cloud_idx, slack_idx, action_id] += self.alpha * (target - current_q)
         
         # Decay epsilon
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
@@ -239,7 +205,7 @@ class OneShotActorCriticWrapper:
         initial_bw, initial_cloud, initial_slack = self.get_episode_state()
         
         # Choose action
-        action_id, action_probs = self.choose_action(initial_bw, initial_cloud, initial_slack)
+        action_id = self.choose_action(initial_bw, initial_cloud, initial_slack)
         action_vector = self.action_vectors[action_id]
         
         # Execute
@@ -279,23 +245,23 @@ class OneShotActorCriticWrapper:
         # Calculate slack: completion_time - deadline
         slack = total_time - self.deadline
         
-        # Check deadline (positive slack means deadline missed)
-        deadline_missed = 1 if slack > 0 else 0
+        # Check deadline
+        deadline_missed = 1 if slack > 0 else 0  # Positive slack means missed deadline
         
         # Calculate reward
         reward = -total_energy
         if deadline_missed:
             excess_ratio = slack / self.deadline
-            reward -= 100000.0 * excess_ratio
+            reward -= 10000000 * excess_ratio
         
         # Update for next episode
         next_bw = current_state[0]
         next_cloud = total_cloud_waiting
-        next_slack = slack
+        next_slack = slack  # Slack for next episode is slack from current episode
         
-        # Update actor-critic
-        self.update(initial_bw, initial_cloud, initial_slack, action_id, action_probs, 
-                   reward, next_bw, next_cloud, next_slack)
+        # Update Q-tables
+        self.update(initial_bw, initial_cloud, initial_slack, action_id, reward, 
+                   next_bw, next_cloud, next_slack)
         
         # Update state for next episode
         self.current_cloud_time = next_cloud
@@ -332,13 +298,15 @@ class OneShotActorCriticWrapper:
                       f"Miss={deadline_misses/(episode+1)*100:.1f}%")
         
         return np.mean(energies), np.mean(times), deadline_misses
+    
 
-def run_oneshot_a2c_simulation(profiling_data, episodes, max_steps, is_test=False):
+
+def run_oneshot_doubleQ_simulation(profiling_data, episodes, max_steps, is_test=False):
     """
-    Run one-shot Actor-Critic simulation.
+    Run one-shot Double Q-learning simulation.
     Returns: avg_energy, avg_time, deadline_miss_count
     """
-    agent = OneShotActorCriticWrapper(profiling_data, profiling_data.deadline)
+    agent = OneShotDoubleQLearningWrapper(profiling_data, profiling_data.deadline)
     agent.load_qtables()
     result = agent.run_simulation(episodes, max_steps, is_test)
     agent.save_qtables()

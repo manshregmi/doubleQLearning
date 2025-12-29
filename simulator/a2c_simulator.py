@@ -25,6 +25,7 @@ def run_a2c_simulation(
 
     start_time = time.time()
     print(f"Starting A2C simulation at: {start_time}")
+    bandwidth = profiling_data.bandwidth
 
     for ep in range(episodes):
 
@@ -33,7 +34,7 @@ def run_a2c_simulation(
         total_reward = 0.0
 
         cloud_time = 0.0
-        current_state = (profiling_data.bandwidth, cloud_time, 0, None, 0, 0)
+        current_state = (bandwidth, cloud_time, 0, None, 0, 0)
 
         trajectory = []
         step_surpluses = []
@@ -54,6 +55,9 @@ def run_a2c_simulation(
                 fractional_deadline,
                 neg_count,
             ) = agent.train(current_state)
+
+
+            bandwidth = next_state[0]
 
             prev_neg = current_state[5]
             neg_increased = neg_count > prev_neg
