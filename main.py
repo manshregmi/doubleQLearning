@@ -43,14 +43,23 @@ if __name__ == "__main__":
         cg_a2c_deadline_misses.append(cg_a2c_dm)
 
 
-print("Double Q-Learning Results:")
-print("computation times per episode:", np.mean(dq_episode_computation_time), "standard deviation: ", np.std(dq_episode_computation_time), "min: ", np.min(dq_episode_computation_time), "max: ", np.max(dq_episode_computation_time))
+    dq_episode_computation_time = np.array(dq_episode_computation_time)
+    dq_episode_computation_time = dq_episode_computation_time[1:]
+
+    a2c_episode_computation_time = np.array(a2c_episode_computation_time)
+    a2c_episode_computation_time = a2c_episode_computation_time[1:]
+
+    cg_a2c_episode_computation_time = np.array(cg_a2c_episode_computation_time)
+    cg_a2c_episode_computation_time = cg_a2c_episode_computation_time[1:]
+
+    print("Double Q-Learning Results:")
+    print("computation times per episode:", np.mean(dq_episode_computation_time), "standard deviation: ", np.std(dq_episode_computation_time), "min: ", np.min(dq_episode_computation_time), "max: ", np.max(dq_episode_computation_time))
 
 
-print("A2C Results:")
-print("computation times per episode:", np.mean(a2c_episode_computation_time), "standard deviation: ", np.std(a2c_episode_computation_time), "min: ", np.min(a2c_episode_computation_time), "max: ", np.max(a2c_episode_computation_time))
+    print("A2C Results:")
+    print("computation times per episode:", np.mean(a2c_episode_computation_time), "standard deviation: ", np.std(a2c_episode_computation_time), "min: ", np.min(a2c_episode_computation_time), "max: ", np.max(a2c_episode_computation_time))
 
-print("Coarse-Grained A2C Results:")
-print("computation times per episode:", np.mean(cg_a2c_episode_computation_time), "standard deviation: ", np.std(cg_a2c_episode_computation_time), "min: ", np.min(cg_a2c_episode_computation_time), "max: ", np.max(cg_a2c_episode_computation_time))
+    print("Coarse-Grained A2C Results:")
+    print("computation times per episode:", np.mean(cg_a2c_episode_computation_time), "standard deviation: ", np.std(cg_a2c_episode_computation_time), "min: ", np.min(cg_a2c_episode_computation_time), "max: ", np.max(cg_a2c_episode_computation_time))
 
 
