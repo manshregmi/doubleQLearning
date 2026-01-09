@@ -44,13 +44,13 @@ if __name__ == "__main__":
 
 
     dq_episode_computation_time = np.array(dq_episode_computation_time)
-    dq_episode_computation_time = dq_episode_computation_time[1:]
+    dq_episode_computation_time = dq_episode_computation_time[10:]
 
     a2c_episode_computation_time = np.array(a2c_episode_computation_time)
-    a2c_episode_computation_time = a2c_episode_computation_time[1:]
+    a2c_episode_computation_time = a2c_episode_computation_time[10:]
 
     cg_a2c_episode_computation_time = np.array(cg_a2c_episode_computation_time)
-    cg_a2c_episode_computation_time = cg_a2c_episode_computation_time[1:]
+    cg_a2c_episode_computation_time = cg_a2c_episode_computation_time[10:]
 
     print("Double Q-Learning Results:")
     print("computation times per episode:", np.mean(dq_episode_computation_time), "standard deviation: ", np.std(dq_episode_computation_time), "min: ", np.min(dq_episode_computation_time), "max: ", np.max(dq_episode_computation_time))
