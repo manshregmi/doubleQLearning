@@ -10,10 +10,10 @@ import numpy as np
 
 if __name__ == "__main__":
     is_test = False
-    episodes = 1000000
+    episodes = 50000
     # episodes = 100
     max_steps = 10
-    deadlines = list(range(450, 605, 50))  # 400ms to 600ms
+    deadlines = list(range(400, 601, 50))  # 400ms to 600ms
     
     # Your existing methods
     dq_energy, dq_time, dq_deadline_misses = [], [], []
@@ -35,7 +35,7 @@ if __name__ == "__main__":
         
         profiling_data = get_profiling_data(d)
 
-        # Your level-wise methods
+        # # Your level-wise methods
         e, t, dm = run_simulation(profiling_data, episodes, max_steps, is_test)
         dq_energy.append(e)
         dq_time.append(t)
@@ -45,6 +45,7 @@ if __name__ == "__main__":
         a2c_energy.append(a2c_e)
         a2c_time.append(a2c_t)
         a2c_deadline_misses.append(a2c_dm/episodes)
+        print("average energy is ", a2c_e, a2c_t)
         
         # NEW: One-shot baselines
         try:
@@ -105,12 +106,12 @@ if __name__ == "__main__":
     if any(not np.isnan(v) for v in oneshot_dq_energy):
         clean_deadlines, clean_oneshot_dq = remove_nan(deadlines, oneshot_dq_energy)
         if clean_deadlines:
-            plt.plot(clean_deadlines, clean_oneshot_dq, label="One-shot DQ", marker='s', linestyle='--', linewidth=1.5)
+            plt.plot(clean_deadlines, clean_oneshot_dq, label="Coarse grained DQ", marker='s', linestyle='--', linewidth=1.5)
     
     if any(not np.isnan(v) for v in oneshot_a2c_energy):
         clean_deadlines, clean_oneshot_a2c = remove_nan(deadlines, oneshot_a2c_energy)
         if clean_deadlines:
-            plt.plot(clean_deadlines, clean_oneshot_a2c, label="One-shot A2C", marker='^', linestyle='--', linewidth=1.5)
+            plt.plot(clean_deadlines, clean_oneshot_a2c, label="Coarse grained A2C", marker='^', linestyle='--', linewidth=1.5)
     
     plt.plot(deadlines, edge_energy, label="All Edge", marker='x', color='gray', alpha=0.7)
     plt.plot(deadlines, cloud_energy, label="All Cloud", marker='+', color='gray', alpha=0.7)
@@ -172,11 +173,11 @@ if __name__ == "__main__":
         
         if deadline_idx < len(oneshot_dq_energy) and not np.isnan(oneshot_dq_energy[deadline_idx]):
             energies.append(oneshot_dq_energy[deadline_idx])
-            labels.append('One-shot DQ')
+            labels.append('Coarse-grained DQ')
         
         if deadline_idx < len(oneshot_a2c_energy) and not np.isnan(oneshot_a2c_energy[deadline_idx]):
             energies.append(oneshot_a2c_energy[deadline_idx])
-            labels.append('One-shot A2C')
+            labels.append('Coarse-grained A2C')
         
         if deadline_idx < len(edge_energy):
             energies.append(edge_energy[deadline_idx])
@@ -185,6 +186,10 @@ if __name__ == "__main__":
         if deadline_idx < len(cloud_energy):
             energies.append(cloud_energy[deadline_idx])
             labels.append('All Cloud')
+
+        if deadline_idx < len(random_energy):
+            energies.append(random_energy[deadline_idx])
+            labels.append('Random')
         
         if not energies:
             print(f"No data available for {deadline_value}ms deadline")
@@ -195,7 +200,15 @@ if __name__ == "__main__":
         width = 0.7
         
         plt.figure(figsize=(12, 6))
-        colors = ['blue', 'green', 'lightblue', 'lightgreen', 'gray', 'darkgray']
+        colors = [
+                'tab:blue',
+                'tab:green',
+                'tab:cyan',
+                'tab:olive',
+                'tab:gray',
+                'tab:brown',
+                'tab:orange'
+            ]
         
         # Use only as many colors as we have bars
         bars = plt.bar(x, energies, width, color=colors[:len(energies)])

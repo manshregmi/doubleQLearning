@@ -39,7 +39,7 @@ class OneShotActorCriticWrapper:
         self.actor_lr = 0.01
         self.critic_lr = 0.1
         self.gamma = 0.95
-        self.epsilon = 1.0
+        self.epsilon = 0.2
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.9995
         
@@ -286,7 +286,7 @@ class OneShotActorCriticWrapper:
         reward = -total_energy
         if deadline_missed:
             excess_ratio = slack / self.deadline
-            reward -= 100000.0 * excess_ratio
+            reward -= 1000.0 * excess_ratio
         
         # Update for next episode
         next_bw = current_state[0]

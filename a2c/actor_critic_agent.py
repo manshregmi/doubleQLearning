@@ -44,13 +44,18 @@ class TabularActorCriticAgent:
         self.temperature = 1.0
         self.temperature_min = 0.25
         self.temperature_decay = 0.999
-        self.temperature_boost = 1.4
+        self.temperature_boost = 0.35
 
         self.epsilon_min = 0.05   # hard ε-floor
 
         self.best_episode_reward = -1e9
         self.episodes_since_improvement = 0
-        self.stagnant_limit = 2500
+        self.stagnant_limit = 10000
+        
+        # Add node execution tracking
+        self.edge_execution_counts = {}  # (layer, node) → count of edge executions
+        self.cloud_execution_counts = {}  # (layer, node) → count of cloud executions
+        self.total_episodes = 0
 
     # ======================================================
     # Discretization
@@ -132,7 +137,6 @@ class TabularActorCriticAgent:
     # Environment step (IDENTICAL)
     # ======================================================
     def train(self, current_state):
-
         action = self.choose_action(current_state)
 
         next_cloud = self.simulator.get_next_state_cloud_waiting_time(
@@ -201,9 +205,30 @@ class TabularActorCriticAgent:
             )
 
     # ======================================================
+    # Node execution tracking
+    # ======================================================
+    def track_action_execution(self, action, layer):
+        """Track where each node was executed (edge=0, cloud=1)"""
+        for node_idx, (_, location) in enumerate(action):
+            key = (layer, node_idx)
+            if location == 0:  # Edge execution
+                self.edge_execution_counts[key] = self.edge_execution_counts.get(key, 0) + 1
+            else:  # Cloud execution
+                self.cloud_execution_counts[key] = self.cloud_execution_counts.get(key, 0) + 1
+    
+    def get_execution_stats(self):
+        """Return execution statistics"""
+        return {
+            'edge_counts': self.edge_execution_counts,
+            'cloud_counts': self.cloud_execution_counts,
+            'total_episodes': self.total_episodes
+        }
+
+    # ======================================================
     # Episode-level exploration control
     # ======================================================
     def notify_episode_end(self, episode_reward):
+        self.total_episodes += 1
         if episode_reward > self.best_episode_reward + 1e-6:
             self.best_episode_reward = episode_reward
             self.episodes_since_improvement = 0
