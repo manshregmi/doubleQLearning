@@ -26,7 +26,7 @@ class DoubleQLearningAgent:
         is_test: bool,
         alpha: float = 0.05,
         gamma: float = 0.95,
-        epsilon: float = 1.0,
+        epsilon: float = 0.35,
     ):
         """
         Args:
@@ -54,7 +54,7 @@ class DoubleQLearningAgent:
         self.simulator = CloudEdgeSimulator(profiling_data)
 
         # --- Discretization bins (same defaults you had) ---
-        self.bandwidth_bins = np.linspace(1, 15, 15)
+        self.bandwidth_bins = np.linspace(1, 15, 60)
         self.cloudtime_bins = np.linspace(0, 100, 20)
         self.surplus_bins = np.linspace(-25, 25, 25)
 
@@ -65,8 +65,8 @@ class DoubleQLearningAgent:
         # --- Adaptive epsilon scheduling ---
         self.epsilon_min = 0.05
         self.epsilon_decay = 0.9995  # slow decay
-        self.epsilon_boost = 0.6  # boost when stuck
-        self.stagnant_limit = 5000  # episodes without improvement to consider "stuck"
+        self.epsilon_boost = 0.35  # boost when stuck
+        self.stagnant_limit = 10000  # episodes without improvement to consider "stuck"
 
         # Episode-level tracking (use notify_episode_end for correct behavior)
         self.best_episode_reward = -1e9

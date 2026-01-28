@@ -65,7 +65,14 @@ class CloudEdgeSimulator:
 
         
         # Bandwidth update (stochastic)
+<<<<<<< HEAD
         bw_change = np.random.normal(-0.5, 0.5)
+=======
+        bw_change_p = random.random()
+        bw_change_n = - random.random()
+        bw_change = bw_change_n + bw_change_p
+        # bw_change = 0
+>>>>>>> 9b7c78ba0f6c586dc693859c3a88643670379850
         new_bandwidth = max(1.0, min(bandwidth + bw_change, 15.0))
 
         # Next layer / terminal flag
@@ -155,6 +162,7 @@ class CloudEdgeSimulator:
 
         return total_energy, completion_time_s
 
+<<<<<<< HEAD
 
 
     def sigmoid(self,x, k=5):
@@ -164,6 +172,8 @@ class CloudEdgeSimulator:
         """
         return 1 / (1 + np.exp(-k * x))
 
+=======
+>>>>>>> 9b7c78ba0f6c586dc693859c3a88643670379850
     def calculate_reward(
         self,
         layer,
@@ -196,12 +206,18 @@ class CloudEdgeSimulator:
             negative_surplus_count += 1
 
         # Smooth weighting: more penalty when surplus is negative
+<<<<<<< HEAD
         sigmoid_weight = self.sigmoid(surplus_ms / 1000.0, k=1)
+=======
+>>>>>>> 9b7c78ba0f6c586dc693859c3a88643670379850
 
         # ---------------- Reward Design ----------------
         # Base penalties
         energy_penalty = total_energy * 1000.0          # scale to ms
+<<<<<<< HEAD
         time_penalty = max(0.0, -surplus_ms)             # only penalize overruns
+=======
+>>>>>>> 9b7c78ba0f6c586dc693859c3a88643670379850
 
         reward = energy_penalty
 

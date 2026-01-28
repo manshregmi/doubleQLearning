@@ -25,15 +25,18 @@ def run_simulation(
 
     start_time = time.time()
     print(f"Starting simulation at: {start_time}")
+    bandwidth = profiling_data.bandwidth
+
 
     for ep in range(episodes):
+
 
         total_energy = 0.0
         total_time = 0.0
         total_reward = 0.0
 
         cloud_time = 0.0
-        current_state = (profiling_data.bandwidth, cloud_time, 0, None, 0, 0)
+        current_state = (bandwidth, cloud_time, 0, None, 0, 0)
 
         trajectory = []
         step_surpluses = []
@@ -58,6 +61,7 @@ def run_simulation(
                 fractional_deadline,
                 negative_surplus_count,
             ) = agent.train(current_state)
+            bandwidth = next_state[0]
 
             # Compute boolean flag required by agent
             prev_negative_surplus = current_state[5]
