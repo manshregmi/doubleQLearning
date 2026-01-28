@@ -49,10 +49,7 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
     """
     episode_energies = []
     episode_completion_times = []
-<<<<<<< HEAD
-=======
     deadline_miss_count = 0
->>>>>>> 9b7c78ba0f6c586dc693859c3a88643670379850
 
     for ep in range(episodes):
         energies = []
@@ -104,15 +101,12 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
                 initial_cloud_time = next_state[1]
                 break
 
-<<<<<<< HEAD
-=======
 
         total_time = np.sum(times)
 
         if (total_time > profiling_data.deadline):
             deadline_miss_count +=1
 
->>>>>>> 9b7c78ba0f6c586dc693859c3a88643670379850
         # record episode-level results
         episode_energies.append(np.sum(energies))
         episode_completion_times.append(np.sum(times))
@@ -134,8 +128,4 @@ def run_random_scheduler(profiling_data: ProfilingData, episodes=10, max_steps=2
     # plt.grid(True)
     # plt.show()
 
-<<<<<<< HEAD
-    return np.mean(episode_energies), np.mean(episode_completion_times)
-=======
     return np.mean(episode_energies), np.mean(episode_completion_times), deadline_miss_count
->>>>>>> 9b7c78ba0f6c586dc693859c3a88643670379850
