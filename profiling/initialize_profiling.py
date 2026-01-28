@@ -1,7 +1,7 @@
 from profiling.profile import ProfilingData
 
 
-def get_profiling_data(deadline):
+def get_profiling_data(deadline, edge_devices):
     layers = [
         [0],         # v1                level 0                    
         [0],        # v2                 level 1
@@ -11,7 +11,7 @@ def get_profiling_data(deadline):
         [0,1,2],         # v6+ v9 + v12      level 5    
         [0],         # v13               level 6
     ]
-    numberOfEdgeDevice = 8  
+    numberOfEdgeDevice = edge_devices 
     # -------------------------------
     # ⏱️ Edge execution times (ms)
     # -------------------------------

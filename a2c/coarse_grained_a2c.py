@@ -23,7 +23,7 @@ class OneShotActorCriticWrapper:
         self.current_slack = 0.0  # Initial slack
         
         # Discretization - Now 3D state space
-        self.bw_bins = np.linspace(1, 15, 60)
+        self.bw_bins = np.linspace(1, 15, 15)
         self.cloud_bins = np.linspace(0, 300, 25)
         self.slack_bins = np.linspace(-100, 100, 20)  # Slack from -100ms to +100ms
         
@@ -36,12 +36,12 @@ class OneShotActorCriticWrapper:
         self._precompute_action_vectors()
         
         # Actor-Critic parameters
-        self.actor_lr = 0.01
+        self.actor_lr = 0.1
         self.critic_lr = 0.1
         self.gamma = 0.95
-        self.epsilon = 0.2
+        self.epsilon = 1
         self.epsilon_min = 0.01
-        self.epsilon_decay = 0.9995
+        self.epsilon_decay = 0.99995
         
         # Policy and value function - Now 3D
         self.policy = np.ones((self.num_bw_bins, self.num_cloud_bins, self.num_slack_bins, self.num_actions))
@@ -286,7 +286,7 @@ class OneShotActorCriticWrapper:
         reward = -total_energy
         if deadline_missed:
             excess_ratio = slack / self.deadline
-            reward -= 1000.0 * excess_ratio
+            reward -= 100000.0 * excess_ratio
         
         # Update for next episode
         next_bw = current_state[0]

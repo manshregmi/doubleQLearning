@@ -68,6 +68,7 @@ class CloudEdgeSimulator:
         bw_change_p = random.random()
         bw_change_n = - random.random()
         bw_change = bw_change_n + bw_change_p
+        # bw_change = 0
         new_bandwidth = max(1.0, min(bandwidth + bw_change, 15.0))
 
         # Next layer / terminal flag
