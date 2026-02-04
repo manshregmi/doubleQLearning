@@ -22,7 +22,7 @@ if __name__ == "__main__":
     plt.rcParams['lines.markersize'] = 10
     
     is_test = False
-    episodes = 100000
+    episodes = 1000
     # episodes = 100
     max_steps = 10
     deadlines = list(range(400, 601, 10))  # 400ms to 600ms
@@ -180,131 +180,131 @@ if __name__ == "__main__":
     plt.savefig("deadline_misses_comparison.png", dpi=600)
     plt.show()
 
-    # # Helper function for bar charts
-    # def create_bar_chart(deadline_value, deadline_idx, suffix=""):
-    #     """Create bar chart for specific deadline."""
-    #     # FIX: Check if deadline_idx exists
-    #     if deadline_idx >= len(deadlines) or deadline_idx < 0:
-    #         print(f"Warning: Deadline {deadline_value}ms not in deadlines list")
-    #         return
+    # Helper function for bar charts
+    def create_bar_chart(deadline_value, deadline_idx, suffix=""):
+        """Create bar chart for specific deadline."""
+        # FIX: Check if deadline_idx exists
+        if deadline_idx >= len(deadlines) or deadline_idx < 0:
+            print(f"Warning: Deadline {deadline_value}ms not in deadlines list")
+            return
         
-    #     # FIX: Check array bounds
-    #     energies = []
-    #     labels = []
+        # FIX: Check array bounds
+        energies = []
+        labels = []
         
-    #     # Collect available data
-    #     if deadline_idx < len(dq_energy):
-    #         energies.append(dq_energy[deadline_idx])
-    #         labels.append('Level DQ')
+        # Collect available data
+        if deadline_idx < len(dq_energy):
+            energies.append(dq_energy[deadline_idx])
+            labels.append('Level DQ')
         
-    #     if deadline_idx < len(a2c_energy):
-    #         energies.append(a2c_energy[deadline_idx])
-    #         labels.append('Level A2C')
+        if deadline_idx < len(a2c_energy):
+            energies.append(a2c_energy[deadline_idx])
+            labels.append('Level A2C')
         
-    #     if deadline_idx < len(oneshot_dq_energy) and not np.isnan(oneshot_dq_energy[deadline_idx]):
-    #         energies.append(oneshot_dq_energy[deadline_idx])
-    #         labels.append('Coarse-grained')
+        if deadline_idx < len(oneshot_dq_energy) and not np.isnan(oneshot_dq_energy[deadline_idx]):
+            energies.append(oneshot_dq_energy[deadline_idx])
+            labels.append('Coarse-grained')
         
-    #     # if deadline_idx < len(oneshot_a2c_energy) and not np.isnan(oneshot_a2c_energy[deadline_idx]):
-    #     #     energies.append(oneshot_a2c_energy[deadline_idx])
-    #     #     labels.append('Coarse-grained A2C')
+        # if deadline_idx < len(oneshot_a2c_energy) and not np.isnan(oneshot_a2c_energy[deadline_idx]):
+        #     energies.append(oneshot_a2c_energy[deadline_idx])
+        #     labels.append('Coarse-grained A2C')
         
-    #     if deadline_idx < len(edge_energy):
-    #         energies.append(edge_energy[deadline_idx])
-    #         labels.append('All Edge')
+        if deadline_idx < len(edge_energy):
+            energies.append(edge_energy[deadline_idx])
+            labels.append('All Edge')
         
-    #     if deadline_idx < len(cloud_energy):
-    #         energies.append(cloud_energy[deadline_idx])
-    #         labels.append('All Cloud')
+        if deadline_idx < len(cloud_energy):
+            energies.append(cloud_energy[deadline_idx])
+            labels.append('All Cloud')
 
-    #     if deadline_idx < len(random_energy):
-    #         energies.append(random_energy[deadline_idx])
-    #         labels.append('Random')
+        if deadline_idx < len(random_energy):
+            energies.append(random_energy[deadline_idx])
+            labels.append('Random')
         
-    #     if not energies:
-    #         print(f"No data available for {deadline_value}ms deadline")
-    #         return
+        if not energies:
+            print(f"No data available for {deadline_value}ms deadline")
+            return
         
-    #     # Create bar chart
-    #     x = np.arange(len(labels))
-    #     width = 0.7
+        # Create bar chart
+        x = np.arange(len(labels))
+        width = 0.7
         
-    #     plt.figure(figsize=(16, 9))  # Larger figure for better text fitting
-    #     colors = [
-    #             'tab:blue',
-    #             'tab:green',
-    #             'tab:cyan',
-    #             'tab:olive',
-    #             'tab:gray',
-    #             'tab:brown',
-    #             # 'tab:orange'
-    #         ]
+        plt.figure(figsize=(16, 9))  # Larger figure for better text fitting
+        colors = [
+                'tab:blue',
+                'tab:green',
+                'tab:cyan',
+                'tab:olive',
+                'tab:gray',
+                'tab:brown',
+                # 'tab:orange'
+            ]
         
-    #     # Use only as many colors as we have bars
-    #     bars = plt.bar(x, energies, width, color=colors[:len(energies)], edgecolor='black', linewidth=1.5)
+        # Use only as many colors as we have bars
+        bars = plt.bar(x, energies, width, color=colors[:len(energies)], edgecolor='black', linewidth=1.5)
         
-    #     # Add value labels on bars with Times New Roman and larger font
-    #     for i, v in enumerate(energies):
-    #         plt.text(i, v + 0.1, f'{v:.2f}', ha='center', va='bottom', 
-    #                  fontsize=22, fontfamily='Times New Roman', fontweight='bold')
+        # Add value labels on bars with Times New Roman and larger font
+        for i, v in enumerate(energies):
+            plt.text(i, v + 0.1, f'{v:.2f}', ha='center', va='bottom', 
+                     fontsize=22, fontfamily='Times New Roman', fontweight='bold')
         
-    #     plt.xticks(x, labels, rotation=45, ha='right', fontsize=24, fontfamily='Times New Roman')
-    #     plt.yticks(fontsize=24, fontfamily='Times New Roman')
-    #     plt.ylabel("Average Energy (Joules)", fontsize=28, fontfamily='Times New Roman')
-    #     plt.title(f"Energy Comparison at {deadline_value} ms Deadline", fontsize=28, fontfamily='Times New Roman')
-    #     plt.grid(axis='y', linestyle='--', alpha=0.6)
-    #     plt.tight_layout()
-    #     plt.savefig(f"energy_bargraph_{deadline_value}ms_comparison{suffix}.png", 
-    #                 dpi=600, bbox_inches='tight')
-    #     plt.show()
+        plt.xticks(x, labels, rotation=45, ha='right', fontsize=24, fontfamily='Times New Roman')
+        plt.yticks(fontsize=24, fontfamily='Times New Roman')
+        plt.ylabel("Average Energy (Joules)", fontsize=28, fontfamily='Times New Roman')
+        plt.title(f"Energy Comparison at {deadline_value} ms Deadline", fontsize=28, fontfamily='Times New Roman')
+        plt.grid(axis='y', linestyle='--', alpha=0.6)
+        plt.tight_layout()
+        plt.savefig(f"energy_bargraph_{deadline_value}ms_comparison{suffix}.png", 
+                    dpi=600, bbox_inches='tight')
+        plt.show()
         
-    #     return energies, labels
+        return energies, labels
 
-    # # Create bar charts for each deadline
-    # for deadline_value in [400, 450, 500, 550, 600]:
-    #     try:
-    #         deadline_idx = deadlines.index(deadline_value)
-    #         create_bar_chart(deadline_value, deadline_idx)
-    #     except ValueError:
-    #         print(f"Deadline {deadline_value}ms not in deadlines list")
+    # Create bar charts for each deadline
+    for deadline_value in [400, 450, 500, 550, 600]:
+        try:
+            deadline_idx = deadlines.index(deadline_value)
+            create_bar_chart(deadline_value, deadline_idx)
+        except ValueError:
+            print(f"Deadline {deadline_value}ms not in deadlines list")
 
-    # # Print results for each deadline
-    # print("\n" + "="*60)
-    # print("SIMULATION RESULTS SUMMARY")
-    # print("="*60)
+    # Print results for each deadline
+    print("\n" + "="*60)
+    print("SIMULATION RESULTS SUMMARY")
+    print("="*60)
     
-    # for deadline_value in [450, 500, 550, 600]:
-    #     try:
-    #         deadline_idx = deadlines.index(deadline_value)
-    #         print(f"\nResults at {deadline_value}ms deadline:")
+    for deadline_value in [450, 500, 550, 600]:
+        try:
+            deadline_idx = deadlines.index(deadline_value)
+            print(f"\nResults at {deadline_value}ms deadline:")
             
-    #         if deadline_idx < len(dq_energy):
-    #             print(f"  Level-wise DQ: Energy={dq_energy[deadline_idx]:.2f}J, "
-    #                   f"Miss={dq_deadline_misses[deadline_idx]*100:.1f}%")
+            if deadline_idx < len(dq_energy):
+                print(f"  Level-wise DQ: Energy={dq_energy[deadline_idx]:.2f}J, "
+                      f"Miss={dq_deadline_misses[deadline_idx]*100:.1f}%")
             
-    #         if deadline_idx < len(a2c_energy):
-    #             print(f"  Level-wise A2C: Energy={a2c_energy[deadline_idx]:.2f}J, "
-    #                   f"Miss={a2c_deadline_misses[deadline_idx]*100:.1f}%")
+            if deadline_idx < len(a2c_energy):
+                print(f"  Level-wise A2C: Energy={a2c_energy[deadline_idx]:.2f}J, "
+                      f"Miss={a2c_deadline_misses[deadline_idx]*100:.1f}%")
             
-    #         if (deadline_idx < len(oneshot_dq_energy) and 
-    #             not np.isnan(oneshot_dq_energy[deadline_idx])):
-    #             print(f"  Coarse-grained DQ: Energy={oneshot_dq_energy[deadline_idx]:.2f}J, "
-    #                   f"Miss={oneshot_dq_deadline_misses[deadline_idx]*100:.1f}%")
+            if (deadline_idx < len(oneshot_dq_energy) and 
+                not np.isnan(oneshot_dq_energy[deadline_idx])):
+                print(f"  Coarse-grained DQ: Energy={oneshot_dq_energy[deadline_idx]:.2f}J, "
+                      f"Miss={oneshot_dq_deadline_misses[deadline_idx]*100:.1f}%")
             
-    #         # if (deadline_idx < len(oneshot_a2c_energy) and 
-    #         #     not np.isnan(oneshot_a2c_energy[deadline_idx])):
-    #         #     print(f"  Coarse-grained A2C: Energy={oneshot_a2c_energy[deadline_idx]:.2f}J, "
-    #         #           f"Miss={oneshot_a2c_deadline_misses[deadline_idx]*100:.1f}%")
+            # if (deadline_idx < len(oneshot_a2c_energy) and 
+            #     not np.isnan(oneshot_a2c_energy[deadline_idx])):
+            #     print(f"  Coarse-grained A2C: Energy={oneshot_a2c_energy[deadline_idx]:.2f}J, "
+            #           f"Miss={oneshot_a2c_deadline_misses[deadline_idx]*100:.1f}%")
             
-    #         if deadline_idx < len(edge_energy):
-    #             print(f"  All Edge: Energy={edge_energy[deadline_idx]:.2f}J")
+            if deadline_idx < len(edge_energy):
+                print(f"  All Edge: Energy={edge_energy[deadline_idx]:.2f}J")
             
-    #         if deadline_idx < len(cloud_energy):
-    #             print(f"  All Cloud: Energy={cloud_energy[deadline_idx]:.2f}J")
+            if deadline_idx < len(cloud_energy):
+                print(f"  All Cloud: Energy={cloud_energy[deadline_idx]:.2f}J")
                 
-    #     except ValueError:
-    #         print(f"\nDeadline {deadline_value}ms not in deadlines list")
+        except ValueError:
+            print(f"\nDeadline {deadline_value}ms not in deadlines list")
     
-    # print("\n" + "="*60)
-    # print("CONCLUSION: Level-wise RL outperforms coarse-grained RL!")
-    # print("="*60)
+    print("\n" + "="*60)
+    print("CONCLUSION: Level-wise RL outperforms coarse-grained RL!")
+    print("="*60)

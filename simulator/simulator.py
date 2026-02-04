@@ -167,27 +167,27 @@ class CloudEdgeSimulator:
         negative_surplus_count, # unused, placeholder for future custom penalties
         isA2C=False,
     ):
-        # Compute per-layer allocated deadline (ms)
-        fractional_deadline_ms = (
-            self.profiling.get_edge_time_for_layer(layer)
-            / self.profiling.get_total_edge_time()
-        ) * self.profiling.deadline
+        # # Compute per-layer allocated deadline (ms)
+        # fractional_deadline_ms = (
+        #     self.profiling.get_edge_time_for_layer(layer)
+        #     / self.profiling.get_total_edge_time()
+        # ) * self.profiling.deadline
 
         # Convert execution time to ms
-        completion_time_ms = completion_time_s * 1000.0
+        # completion_time_ms = completion_time_s * 1000.0
 
         # Effective time budget including carry-over surplus
-        effective_deadline_ms = fractional_deadline_ms + previous_surplus
+        # effective_deadline_ms = fractional_deadline_ms + previous_surplus
 
         # Compute surplus (positive = saved time, negative = overrun)
-        surplus_ms = effective_deadline_ms - completion_time_ms
+        # surplus_ms = effective_deadline_ms - completion_time_ms
 
         # Deadline miss condition
-        missed_deadline = completion_time_ms > effective_deadline_ms
+        # missed_deadline = completion_time_ms > effective_deadline_ms
 
         # Track repeated deadline violations
-        if missed_deadline:
-            negative_surplus_count += 1
+        # if missed_deadline:
+        #     negative_surplus_count += 1
 
         # Smooth weighting: more penalty when surplus is negative
 
@@ -204,7 +204,7 @@ class CloudEdgeSimulator:
         # RL convention: lower cost → higher reward
         reward *= -1.0
 
-        return reward, surplus_ms, negative_surplus_count, fractional_deadline_ms
+        return reward, 0, negative_surplus_count, 0
 
 
 
