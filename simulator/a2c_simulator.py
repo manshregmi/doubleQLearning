@@ -4,21 +4,20 @@ from profiling.profile import ProfilingData
 import numpy as np
 import time
 from collections import defaultdict
-import matplotlib.pyplot as plt
 import pandas as pd
 from scipy.ndimage import gaussian_filter1d
 
-# Set global font settings for conference paper quality
-plt.rcParams['font.family'] = 'serif'
-plt.rcParams['font.serif'] = ['Times New Roman']
-plt.rcParams['axes.titlesize'] = 28
-plt.rcParams['axes.labelsize'] = 28
-plt.rcParams['xtick.labelsize'] = 24
-plt.rcParams['ytick.labelsize'] = 24
-plt.rcParams['legend.fontsize'] = 24
-plt.rcParams['figure.titlesize'] = 28
-plt.rcParams['lines.linewidth'] = 3
-plt.rcParams['lines.markersize'] = 10
+# # Set global font settings for conference paper quality
+# plt.rcParams['font.family'] = 'serif'
+# plt.rcParams['font.serif'] = ['Times New Roman']
+# plt.rcParams['axes.titlesize'] = 28
+# plt.rcParams['axes.labelsize'] = 28
+# plt.rcParams['xtick.labelsize'] = 24
+# plt.rcParams['ytick.labelsize'] = 24
+# plt.rcParams['legend.fontsize'] = 24
+# plt.rcParams['figure.titlesize'] = 28
+# plt.rcParams['lines.linewidth'] = 3
+# plt.rcParams['lines.markersize'] = 10
 
 
 def run_a2c_simulation(
@@ -163,26 +162,26 @@ def run_a2c_simulation(
         episode_modified_rewards.append(modified_reward)
 
     # Plot rewards if requested
-    if plot_rewards and episodes > 1:
+    # if plot_rewards and episodes > 1:
         # plot_reward_curves(modified_rewards=modified_reward)
 
-        R = np.array(episode_modified_rewards)
-        smoothed = np.convolve(R, np.ones(50)/50, mode='valid')
+        # R = np.array(episode_modified_rewards)
+        # smoothed = np.convolve(R, np.ones(50)/50, mode='valid')
         
-        plt.figure(figsize=(12, 8))
-        plt.plot(smoothed, color='#0066CC', linewidth=3)
-        plt.xlabel("Episodes", fontsize=28, fontfamily='Times New Roman')
-        plt.ylabel("Smoothed Reward", fontsize=28, fontfamily='Times New Roman')
-        plt.title("Actor-Critic (A2C) Convergence", fontsize=28, fontfamily='Times New Roman')
-        plt.xticks(fontsize=24, fontfamily='Times New Roman')
-        plt.yticks(fontsize=24, fontfamily='Times New Roman')
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
+        # plt.figure(figsize=(12, 8))
+        # plt.plot(smoothed, color='#0066CC', linewidth=3)
+        # plt.xlabel("Episodes", fontsize=28, fontfamily='Times New Roman')
+        # plt.ylabel("Smoothed Reward", fontsize=28, fontfamily='Times New Roman')
+        # plt.title("Actor-Critic (A2C) Convergence", fontsize=28, fontfamily='Times New Roman')
+        # plt.xticks(fontsize=24, fontfamily='Times New Roman')
+        # plt.yticks(fontsize=24, fontfamily='Times New Roman')
+        # plt.grid(True, alpha=0.3)
+        # plt.tight_layout()
         
-        # pdf_path = f"a2c_convergence.pdf"
-        # plt.savefig(pdf_path, dpi=600, bbox_inches='tight')
-        plt.show()
-        # print(f"A2C convergence plot saved to: {pdf_path}")
+        # # pdf_path = f"a2c_convergence.pdf"
+        # # plt.savefig(pdf_path, dpi=600, bbox_inches='tight')
+        # plt.show()
+        # # print(f"A2C convergence plot saved to: {pdf_path}")
 
 
     # stats = agent.get_execution_stats()
@@ -199,597 +198,597 @@ def run_a2c_simulation(
     )
 
 
-def plot_smooth_reward_curve_paper_quality(rewards, sigma=2.0):
-    """
-    Create a publication-quality smoothed reward curve.
-    sigma: controls the smoothing amount (higher = smoother)
-    """
-    episodes = np.arange(1, len(rewards) + 1)
+# def plot_smooth_reward_curve_paper_quality(rewards, sigma=2.0):
+#     """
+#     Create a publication-quality smoothed reward curve.
+#     sigma: controls the smoothing amount (higher = smoother)
+#     """
+#     episodes = np.arange(1, len(rewards) + 1)
     
-    # Apply Gaussian smoothing (better than moving average)
-    smoothed_rewards = gaussian_filter1d(rewards, sigma=sigma)
+#     # Apply Gaussian smoothing (better than moving average)
+#     smoothed_rewards = gaussian_filter1d(rewards, sigma=sigma)
     
-    # Create figure with publication quality
-    plt.figure(figsize=(10, 6), dpi=300)
+#     # Create figure with publication quality
+#     plt.figure(figsize=(10, 6), dpi=300)
     
-    # Plot with gradient fill under the curve
-    plt.plot(episodes, smoothed_rewards, 
-             color='#2E86AB',
-             linewidth=3,
-             alpha=0.9,
-             label='Smoothed Reward')
-    plt.fill_between(episodes, smoothed_rewards, 
-                     alpha=0.15, 
-                     color='#2E86AB',
-                     linewidth=0)
+#     # Plot with gradient fill under the curve
+#     plt.plot(episodes, smoothed_rewards, 
+#              color='#2E86AB',
+#              linewidth=3,
+#              alpha=0.9,
+#              label='Smoothed Reward')
+#     plt.fill_between(episodes, smoothed_rewards, 
+#                      alpha=0.15, 
+#                      color='#2E86AB',
+#                      linewidth=0)
     
-    # Style with Times New Roman fonts
-    plt.xlabel('Episode', fontsize=28, fontfamily='Times New Roman', fontweight='medium', labelpad=10)
-    plt.ylabel('Reward', fontsize=28, fontfamily='Times New Roman', fontweight='medium', labelpad=10)
+#     # Style with Times New Roman fonts
+#     plt.xlabel('Episode', fontsize=28, fontfamily='Times New Roman', fontweight='medium', labelpad=10)
+#     plt.ylabel('Reward', fontsize=28, fontfamily='Times New Roman', fontweight='medium', labelpad=10)
     
-    # Add grid (subtle)
-    plt.grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
+#     # Add grid (subtle)
+#     plt.grid(True, alpha=0.2, linestyle='--', linewidth=0.5)
     
-    # Remove top and right spines
-    ax = plt.gca()
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_linewidth(2)
-    ax.spines['bottom'].set_linewidth(2)
+#     # Remove top and right spines
+#     ax = plt.gca()
+#     ax.spines['top'].set_visible(False)
+#     ax.spines['right'].set_visible(False)
+#     ax.spines['left'].set_linewidth(2)
+#     ax.spines['bottom'].set_linewidth(2)
     
-    # Add legend with Times New Roman
-    plt.legend(
-        loc="center left",
-        bbox_to_anchor=(1.02, 0.5),
-        frameon=True,
-        prop={'family': 'Times New Roman', 'size': 24}
-    )
+#     # Add legend with Times New Roman
+#     plt.legend(
+#         loc="center left",
+#         bbox_to_anchor=(1.02, 0.5),
+#         frameon=True,
+#         prop={'family': 'Times New Roman', 'size': 24}
+#     )
 
     
-    # Set tick font sizes
-    plt.xticks(fontsize=24, fontfamily='Times New Roman')
-    plt.yticks(fontsize=24, fontfamily='Times New Roman')
+#     # Set tick font sizes
+#     plt.xticks(fontsize=24, fontfamily='Times New Roman')
+#     plt.yticks(fontsize=24, fontfamily='Times New Roman')
     
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
 
 
-def plot_reward_curve_paper_style(rewards):
-    """
-    Plot the reward curve exactly like Figure 7 in the paper.
-    Simple, clean, single line showing reward convergence.
-    """
-    episodes = np.arange(1, len(rewards) + 1)
+# def plot_reward_curve_paper_style(rewards):
+#     """
+#     Plot the reward curve exactly like Figure 7 in the paper.
+#     Simple, clean, single line showing reward convergence.
+#     """
+#     episodes = np.arange(1, len(rewards) + 1)
     
-    # Create figure with conference paper quality
-    plt.figure(figsize=(12, 8))
+#     # Create figure with conference paper quality
+#     plt.figure(figsize=(12, 8))
     
-    # Plot raw reward curve (no smoothing)
-    plt.plot(episodes, rewards, 
-             color='black', 
-             linewidth=2.5)
+#     # Plot raw reward curve (no smoothing)
+#     plt.plot(episodes, rewards, 
+#              color='black', 
+#              linewidth=2.5)
     
-    # Style with Times New Roman
-    plt.xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
-    plt.ylabel('Reward', fontsize=28, fontfamily='Times New Roman')
+#     # Style with Times New Roman
+#     plt.xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
+#     plt.ylabel('Reward', fontsize=28, fontfamily='Times New Roman')
     
-    # Add subtle grid
-    plt.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
+#     # Add subtle grid
+#     plt.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
     
-    # Set tick font sizes
-    plt.xticks(fontsize=24, fontfamily='Times New Roman')
-    plt.yticks(fontsize=24, fontfamily='Times New Roman')
+#     # Set tick font sizes
+#     plt.xticks(fontsize=24, fontfamily='Times New Roman')
+#     plt.yticks(fontsize=24, fontfamily='Times New Roman')
     
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
 
 
-def plot_paper_style_comparison(rewards_list, labels=None, smoothing_window=50, deadline_ms=500):
-    """
-    Create a comparison plot similar to Figure 7 in the paper.
-    Shows smoothed reward convergence for different methods/algorithms.
-    """
+# def plot_paper_style_comparison(rewards_list, labels=None, smoothing_window=50, deadline_ms=500):
+#     """
+#     Create a comparison plot similar to Figure 7 in the paper.
+#     Shows smoothed reward convergence for different methods/algorithms.
+#     """
     
-    if labels is None:
-        labels = [f'Method {i+1}' for i in range(len(rewards_list))]
+#     if labels is None:
+#         labels = [f'Method {i+1}' for i in range(len(rewards_list))]
     
-    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
+#     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
     
-    fig, ax = plt.subplots(figsize=(14, 8))
+#     fig, ax = plt.subplots(figsize=(14, 8))
     
-    # Set clean background
-    fig.patch.set_facecolor('white')
-    ax.set_facecolor('white')
+#     # Set clean background
+#     fig.patch.set_facecolor('white')
+#     ax.set_facecolor('white')
     
-    for i, rewards in enumerate(rewards_list):
-        episodes = np.arange(1, len(rewards) + 1)
+#     for i, rewards in enumerate(rewards_list):
+#         episodes = np.arange(1, len(rewards) + 1)
         
-        # Apply smoothing
-        if len(rewards) >= smoothing_window:
-            smoothed = pd.Series(rewards).rolling(
-                window=smoothing_window, center=True, min_periods=1
-            ).mean().values
-        else:
-            smoothed = rewards
+#         # Apply smoothing
+#         if len(rewards) >= smoothing_window:
+#             smoothed = pd.Series(rewards).rolling(
+#                 window=smoothing_window, center=True, min_periods=1
+#             ).mean().values
+#         else:
+#             smoothed = rewards
         
-        # Plot smoothed curve
-        color = colors[i % len(colors)]
-        ax.plot(episodes, smoothed, 
-               color=color, 
-               linewidth=3,
-               label=labels[i])
+#         # Plot smoothed curve
+#         color = colors[i % len(colors)]
+#         ax.plot(episodes, smoothed, 
+#                color=color, 
+#                linewidth=3,
+#                label=labels[i])
     
-    # Customize plot with Times New Roman
-    ax.set_xlabel('Episode', fontsize=28, fontfamily='Times New Roman', fontweight='medium')
-    ax.set_ylabel('Smoothed Reward', fontsize=28, fontfamily='Times New Roman', fontweight='medium')
-    ax.set_title(f'RL Agent Convergence Comparison ({deadline_ms}ms Deadline)', 
-                fontsize=28, fontfamily='Times New Roman', fontweight='bold', pad=20)
+#     # Customize plot with Times New Roman
+#     ax.set_xlabel('Episode', fontsize=28, fontfamily='Times New Roman', fontweight='medium')
+#     ax.set_ylabel('Smoothed Reward', fontsize=28, fontfamily='Times New Roman', fontweight='medium')
+#     ax.set_title(f'RL Agent Convergence Comparison ({deadline_ms}ms Deadline)', 
+#                 fontsize=28, fontfamily='Times New Roman', fontweight='bold', pad=20)
     
-    ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
-    ax.legend(loc='best', frameon=True, framealpha=0.9, facecolor='white', 
-              prop={'family': 'Times New Roman', 'size': 24})
+#     ax.grid(True, alpha=0.2, linestyle='-', linewidth=0.5)
+#     ax.legend(loc='best', frameon=True, framealpha=0.9, facecolor='white', 
+#               prop={'family': 'Times New Roman', 'size': 24})
     
-    # Add smoothing note
-    ax.text(0.98, 0.02, f'Moving average (window={smoothing_window})', 
-            transform=ax.transAxes, fontsize=20, fontfamily='Times New Roman',
-            ha='right', va='bottom', color='gray', alpha=0.7)
+#     # Add smoothing note
+#     ax.text(0.98, 0.02, f'Moving average (window={smoothing_window})', 
+#             transform=ax.transAxes, fontsize=20, fontfamily='Times New Roman',
+#             ha='right', va='bottom', color='gray', alpha=0.7)
     
-    # Customize spines
-    for spine in ax.spines.values():
-        spine.set_linewidth(2)
-        spine.set_color('black')
+#     # Customize spines
+#     for spine in ax.spines.values():
+#         spine.set_linewidth(2)
+#         spine.set_color('black')
     
-    # Set tick font sizes
-    ax.tick_params(axis='both', which='major', labelsize=24)
-    for label in ax.get_xticklabels():
-        label.set_fontfamily('Times New Roman')
-    for label in ax.get_yticklabels():
-        label.set_fontfamily('Times New Roman')
+#     # Set tick font sizes
+#     ax.tick_params(axis='both', which='major', labelsize=24)
+#     for label in ax.get_xticklabels():
+#         label.set_fontfamily('Times New Roman')
+#     for label in ax.get_yticklabels():
+#         label.set_fontfamily('Times New Roman')
     
-    plt.tight_layout()
-    plt.show()
+#     plt.tight_layout()
+#     plt.show()
 
 
-def plot_simple_smoothed_reward(rewards, smoothing_window=1, color='black', linewidth=2):
-    """
-    Minimalist plot showing only smoothed reward curve.
-    """
-    episodes = np.arange(1, len(rewards) + 1)
+# def plot_simple_smoothed_reward(rewards, smoothing_window=1, color='black', linewidth=2):
+#     """
+#     Minimalist plot showing only smoothed reward curve.
+#     """
+#     episodes = np.arange(1, len(rewards) + 1)
     
-    # Smooth the rewards
-    smoothed = pd.Series(rewards).rolling(
-        window=smoothing_window, center=True, min_periods=1
-    ).mean()
+#     # Smooth the rewards
+#     smoothed = pd.Series(rewards).rolling(
+#         window=smoothing_window, center=True, min_periods=1
+#     ).mean()
     
-    # Create plot
-    plt.figure(figsize=(12, 8))
-    plt.plot(episodes, smoothed, color=color, linewidth=3)
+#     # Create plot
+#     plt.figure(figsize=(12, 8))
+#     plt.plot(episodes, smoothed, color=color, linewidth=3)
     
-    # Style with Times New Roman
-    plt.xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
-    plt.ylabel('Reward', fontsize=28, fontfamily='Times New Roman')
-    plt.title('Actor-Critic Agent: Reward Curve', fontsize=28, fontfamily='Times New Roman', fontweight='bold')
+#     # Style with Times New Roman
+#     plt.xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
+#     plt.ylabel('Reward', fontsize=28, fontfamily='Times New Roman')
+#     plt.title('Actor-Critic Agent: Reward Curve', fontsize=28, fontfamily='Times New Roman', fontweight='bold')
     
-    plt.grid(True, alpha=0.2, linestyle='-')
-    plt.xticks(fontsize=24, fontfamily='Times New Roman')
-    plt.yticks(fontsize=24, fontfamily='Times New Roman')
-    plt.tight_layout()
-    plt.show()
+#     plt.grid(True, alpha=0.2, linestyle='-')
+#     plt.xticks(fontsize=24, fontfamily='Times New Roman')
+#     plt.yticks(fontsize=24, fontfamily='Times New Roman')
+#     plt.tight_layout()
+#     plt.show()
 
 
-def plot_reward_curves(original_rewards, modified_rewards, energy, times, deadline_status, 
-                      deadline_constraint, plot_type='combined', smoothing_window=50):
-    """
-    Plot reward progression across episodes.
-    """
+# def plot_reward_curves(original_rewards, modified_rewards, energy, times, deadline_status, 
+#                       deadline_constraint, plot_type='combined', smoothing_window=50):
+#     """
+#     Plot reward progression across episodes.
+#     """
     
-    episodes = np.arange(1, len(original_rewards) + 1)
+#     episodes = np.arange(1, len(original_rewards) + 1)
     
-    if plot_type == 'separate':
-        # Create a 2x2 grid of subplots
-        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
-        fig.suptitle('Actor-Critic Agent Learning Progress Across Episodes', 
-                     fontsize=28, fontfamily='Times New Roman', fontweight='bold', y=1.02)
+#     if plot_type == 'separate':
+#         # Create a 2x2 grid of subplots
+#         fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+#         fig.suptitle('Actor-Critic Agent Learning Progress Across Episodes', 
+#                      fontsize=28, fontfamily='Times New Roman', fontweight='bold', y=1.02)
         
-        # Plot 1: Original vs Modified Rewards
-        axes[0, 0].plot(episodes, original_rewards, 'b-', alpha=0.6, linewidth=2.5, label='Original Reward')
-        axes[0, 0].plot(episodes, modified_rewards, 'r-', alpha=0.8, linewidth=2.5, label='Modified Reward')
-        axes[0, 0].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
-        axes[0, 0].set_ylabel('Reward', fontsize=24, fontfamily='Times New Roman')
-        axes[0, 0].set_title('Reward Progression', fontsize=26, fontfamily='Times New Roman')
-        axes[0, 0].legend(prop={'family': 'Times New Roman', 'size': 20})
-        axes[0, 0].grid(True, alpha=0.3)
-        axes[0, 0].tick_params(axis='both', labelsize=20)
+#         # Plot 1: Original vs Modified Rewards
+#         axes[0, 0].plot(episodes, original_rewards, 'b-', alpha=0.6, linewidth=2.5, label='Original Reward')
+#         axes[0, 0].plot(episodes, modified_rewards, 'r-', alpha=0.8, linewidth=2.5, label='Modified Reward')
+#         axes[0, 0].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
+#         axes[0, 0].set_ylabel('Reward', fontsize=24, fontfamily='Times New Roman')
+#         axes[0, 0].set_title('Reward Progression', fontsize=26, fontfamily='Times New Roman')
+#         axes[0, 0].legend(prop={'family': 'Times New Roman', 'size': 20})
+#         axes[0, 0].grid(True, alpha=0.3)
+#         axes[0, 0].tick_params(axis='both', labelsize=20)
         
-        # Plot 2: Energy Consumption
-        axes[0, 1].plot(episodes, energy, 'g-', linewidth=2.5)
-        axes[0, 1].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
-        axes[0, 1].set_ylabel('Energy (J)', fontsize=24, fontfamily='Times New Roman')
-        axes[0, 1].set_title('Energy Consumption per Episode', fontsize=26, fontfamily='Times New Roman')
-        axes[0, 1].grid(True, alpha=0.3)
-        axes[0, 1].tick_params(axis='both', labelsize=20)
+#         # Plot 2: Energy Consumption
+#         axes[0, 1].plot(episodes, energy, 'g-', linewidth=2.5)
+#         axes[0, 1].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
+#         axes[0, 1].set_ylabel('Energy (J)', fontsize=24, fontfamily='Times New Roman')
+#         axes[0, 1].set_title('Energy Consumption per Episode', fontsize=26, fontfamily='Times New Roman')
+#         axes[0, 1].grid(True, alpha=0.3)
+#         axes[0, 1].tick_params(axis='both', labelsize=20)
         
-        # Plot 3: Completion Time with Deadline
-        axes[1, 0].plot(episodes, times, 'm-', linewidth=2.5, label='Completion Time')
-        axes[1, 0].axhline(y=deadline_constraint, color='r', linestyle='--', linewidth=3, 
-                          label=f'Deadline ({deadline_constraint}ms)')
-        # Color points based on deadline status
-        for ep, time_val, met in zip(episodes, times, deadline_status):
-            color = 'green' if met else 'red'
-            axes[1, 0].scatter(ep, time_val, color=color, s=30, alpha=0.6)
-        axes[1, 0].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
-        axes[1, 0].set_ylabel('Time (ms)', fontsize=24, fontfamily='Times New Roman')
-        axes[1, 0].set_title('Completion Time vs Deadline', fontsize=26, fontfamily='Times New Roman')
-        axes[1, 0].legend(prop={'family': 'Times New Roman', 'size': 20})
-        axes[1, 0].grid(True, alpha=0.3)
-        axes[1, 0].tick_params(axis='both', labelsize=20)
+#         # Plot 3: Completion Time with Deadline
+#         axes[1, 0].plot(episodes, times, 'm-', linewidth=2.5, label='Completion Time')
+#         axes[1, 0].axhline(y=deadline_constraint, color='r', linestyle='--', linewidth=3, 
+#                           label=f'Deadline ({deadline_constraint}ms)')
+#         # Color points based on deadline status
+#         for ep, time_val, met in zip(episodes, times, deadline_status):
+#             color = 'green' if met else 'red'
+#             axes[1, 0].scatter(ep, time_val, color=color, s=30, alpha=0.6)
+#         axes[1, 0].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
+#         axes[1, 0].set_ylabel('Time (ms)', fontsize=24, fontfamily='Times New Roman')
+#         axes[1, 0].set_title('Completion Time vs Deadline', fontsize=26, fontfamily='Times New Roman')
+#         axes[1, 0].legend(prop={'family': 'Times New Roman', 'size': 20})
+#         axes[1, 0].grid(True, alpha=0.3)
+#         axes[1, 0].tick_params(axis='both', labelsize=20)
         
-        # Plot 4: Moving average of modified reward
-        if len(modified_rewards) >= smoothing_window:
-            smoothed_rewards = pd.Series(modified_rewards).rolling(window=smoothing_window, center=True).mean()
-            axes[1, 1].plot(episodes, modified_rewards, 'r-', alpha=0.3, linewidth=1.5, label='Raw')
-            axes[1, 1].plot(episodes, smoothed_rewards, 'k-', linewidth=3, 
-                           label=f'Moving Avg (window={smoothing_window})')
-            axes[1, 1].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
-            axes[1, 1].set_ylabel('Reward', fontsize=24, fontfamily='Times New Roman')
-            axes[1, 1].set_title('Smoothed Reward Progression', fontsize=26, fontfamily='Times New Roman')
-            axes[1, 1].legend(prop={'family': 'Times New Roman', 'size': 20})
-            axes[1, 1].grid(True, alpha=0.3)
-            axes[1, 1].tick_params(axis='both', labelsize=20)
-        else:
-            axes[1, 1].plot(episodes, modified_rewards, 'r-', linewidth=2.5)
-            axes[1, 1].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
-            axes[1, 1].set_ylabel('Reward', fontsize=24, fontfamily='Times New Roman')
-            axes[1, 1].set_title('Modified Reward Progression', fontsize=26, fontfamily='Times New Roman')
-            axes[1, 1].grid(True, alpha=0.3)
-            axes[1, 1].tick_params(axis='both', labelsize=20)
+#         # Plot 4: Moving average of modified reward
+#         if len(modified_rewards) >= smoothing_window:
+#             smoothed_rewards = pd.Series(modified_rewards).rolling(window=smoothing_window, center=True).mean()
+#             axes[1, 1].plot(episodes, modified_rewards, 'r-', alpha=0.3, linewidth=1.5, label='Raw')
+#             axes[1, 1].plot(episodes, smoothed_rewards, 'k-', linewidth=3, 
+#                            label=f'Moving Avg (window={smoothing_window})')
+#             axes[1, 1].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
+#             axes[1, 1].set_ylabel('Reward', fontsize=24, fontfamily='Times New Roman')
+#             axes[1, 1].set_title('Smoothed Reward Progression', fontsize=26, fontfamily='Times New Roman')
+#             axes[1, 1].legend(prop={'family': 'Times New Roman', 'size': 20})
+#             axes[1, 1].grid(True, alpha=0.3)
+#             axes[1, 1].tick_params(axis='both', labelsize=20)
+#         else:
+#             axes[1, 1].plot(episodes, modified_rewards, 'r-', linewidth=2.5)
+#             axes[1, 1].set_xlabel('Episode', fontsize=24, fontfamily='Times New Roman')
+#             axes[1, 1].set_ylabel('Reward', fontsize=24, fontfamily='Times New Roman')
+#             axes[1, 1].set_title('Modified Reward Progression', fontsize=26, fontfamily='Times New Roman')
+#             axes[1, 1].grid(True, alpha=0.3)
+#             axes[1, 1].tick_params(axis='both', labelsize=20)
         
-        # Apply Times New Roman to all axes
-        for ax_row in axes:
-            for ax in ax_row:
-                for label in ax.get_xticklabels():
-                    label.set_fontfamily('Times New Roman')
-                for label in ax.get_yticklabels():
-                    label.set_fontfamily('Times New Roman')
+#         # Apply Times New Roman to all axes
+#         for ax_row in axes:
+#             for ax in ax_row:
+#                 for label in ax.get_xticklabels():
+#                     label.set_fontfamily('Times New Roman')
+#                 for label in ax.get_yticklabels():
+#                     label.set_fontfamily('Times New Roman')
         
-        plt.tight_layout()
+#         plt.tight_layout()
         
-    elif plot_type == 'smoothed':
-        # Single plot with smoothed rewards
-        fig, ax = plt.subplots(figsize=(14, 8))
+#     elif plot_type == 'smoothed':
+#         # Single plot with smoothed rewards
+#         fig, ax = plt.subplots(figsize=(14, 8))
         
-        if len(modified_rewards) >= smoothing_window:
-            smoothed_rewards = pd.Series(modified_rewards).rolling(window=smoothing_window, center=True).mean()
-            ax.plot(episodes, modified_rewards, 'r-', alpha=0.3, linewidth=1.5, label='Raw Modified Reward')
-            ax.plot(episodes, smoothed_rewards, 'k-', linewidth=3.5, 
-                   label=f'Smoothed Modified Reward (window={smoothing_window})')
-        else:
-            ax.plot(episodes, modified_rewards, 'r-', linewidth=2.5, label='Modified Reward')
+#         if len(modified_rewards) >= smoothing_window:
+#             smoothed_rewards = pd.Series(modified_rewards).rolling(window=smoothing_window, center=True).mean()
+#             ax.plot(episodes, modified_rewards, 'r-', alpha=0.3, linewidth=1.5, label='Raw Modified Reward')
+#             ax.plot(episodes, smoothed_rewards, 'k-', linewidth=3.5, 
+#                    label=f'Smoothed Modified Reward (window={smoothing_window})')
+#         else:
+#             ax.plot(episodes, modified_rewards, 'r-', linewidth=2.5, label='Modified Reward')
         
-        ax.set_xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
-        ax.set_ylabel('Reward', fontsize=28, fontfamily='Times New Roman')
-        ax.set_title('Actor-Critic Agent: Smoothed Reward Progression', 
-                    fontsize=28, fontfamily='Times New Roman', fontweight='bold')
-        ax.legend(prop={'family': 'Times New Roman', 'size': 24})
-        ax.grid(True, alpha=0.3)
+#         ax.set_xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
+#         ax.set_ylabel('Reward', fontsize=28, fontfamily='Times New Roman')
+#         ax.set_title('Actor-Critic Agent: Smoothed Reward Progression', 
+#                     fontsize=28, fontfamily='Times New Roman', fontweight='bold')
+#         ax.legend(prop={'family': 'Times New Roman', 'size': 24})
+#         ax.grid(True, alpha=0.3)
         
-        # Add deadline performance annotation
-        deadline_met_rate = sum(deadline_status) / len(deadline_status) * 100
-        ax.text(0.02, 0.98, f'Deadline Met: {deadline_met_rate:.1f}%', 
-                transform=ax.transAxes, fontsize=20, fontfamily='Times New Roman',
-                verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+#         # Add deadline performance annotation
+#         deadline_met_rate = sum(deadline_status) / len(deadline_status) * 100
+#         ax.text(0.02, 0.98, f'Deadline Met: {deadline_met_rate:.1f}%', 
+#                 transform=ax.transAxes, fontsize=20, fontfamily='Times New Roman',
+#                 verticalalignment='top',
+#                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
-        # Set tick font sizes
-        ax.tick_params(axis='both', which='major', labelsize=24)
-        for label in ax.get_xticklabels():
-            label.set_fontfamily('Times New Roman')
-        for label in ax.get_yticklabels():
-            label.set_fontfamily('Times New Roman')
+#         # Set tick font sizes
+#         ax.tick_params(axis='both', which='major', labelsize=24)
+#         for label in ax.get_xticklabels():
+#             label.set_fontfamily('Times New Roman')
+#         for label in ax.get_yticklabels():
+#             label.set_fontfamily('Times New Roman')
         
-    else:  # 'combined' - default
-        # Combined plot with rewards and deadline status
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 12), sharex=True)
+#     else:  # 'combined' - default
+#         # Combined plot with rewards and deadline status
+#         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 12), sharex=True)
         
-        # Top plot: Rewards
-        ax1.plot(episodes, original_rewards, 'b-', alpha=0.6, linewidth=2.5, label='Original Reward')
-        ax1.plot(episodes, modified_rewards, 'r-', alpha=0.8, linewidth=2.5, label='Modified Reward')
+#         # Top plot: Rewards
+#         ax1.plot(episodes, original_rewards, 'b-', alpha=0.6, linewidth=2.5, label='Original Reward')
+#         ax1.plot(episodes, modified_rewards, 'r-', alpha=0.8, linewidth=2.5, label='Modified Reward')
         
-        # Add moving average if enough episodes
-        if len(modified_rewards) >= smoothing_window:
-            smoothed = pd.Series(modified_rewards).rolling(window=smoothing_window, center=True).mean()
-            ax1.plot(episodes, smoothed, 'k--', linewidth=3, label=f'Moving Avg (window={smoothing_window})')
+#         # Add moving average if enough episodes
+#         if len(modified_rewards) >= smoothing_window:
+#             smoothed = pd.Series(modified_rewards).rolling(window=smoothing_window, center=True).mean()
+#             ax1.plot(episodes, smoothed, 'k--', linewidth=3, label=f'Moving Avg (window={smoothing_window})')
         
-        ax1.set_ylabel('Reward', fontsize=28, fontfamily='Times New Roman')
-        ax1.set_title('Actor-Critic Agent: Reward Progression Across Episodes', 
-                     fontsize=28, fontfamily='Times New Roman', fontweight='bold')
-        ax1.legend(prop={'family': 'Times New Roman', 'size': 24})
-        ax1.grid(True, alpha=0.3)
+#         ax1.set_ylabel('Reward', fontsize=28, fontfamily='Times New Roman')
+#         ax1.set_title('Actor-Critic Agent: Reward Progression Across Episodes', 
+#                      fontsize=28, fontfamily='Times New Roman', fontweight='bold')
+#         ax1.legend(prop={'family': 'Times New Roman', 'size': 24})
+#         ax1.grid(True, alpha=0.3)
         
-        # Bottom plot: Completion time with deadline status
-        colors = ['green' if met else 'red' for met in deadline_status]
-        ax2.scatter(episodes, times, c=colors, s=40, alpha=0.7, label='Completion Time')
-        ax2.axhline(y=deadline_constraint, color='r', linestyle='--', linewidth=3, 
-                   label=f'Deadline ({deadline_constraint}ms)')
+#         # Bottom plot: Completion time with deadline status
+#         colors = ['green' if met else 'red' for met in deadline_status]
+#         ax2.scatter(episodes, times, c=colors, s=40, alpha=0.7, label='Completion Time')
+#         ax2.axhline(y=deadline_constraint, color='r', linestyle='--', linewidth=3, 
+#                    label=f'Deadline ({deadline_constraint}ms)')
         
-        # Add a line connecting the points
-        ax2.plot(episodes, times, 'gray', alpha=0.3, linewidth=1)
+#         # Add a line connecting the points
+#         ax2.plot(episodes, times, 'gray', alpha=0.3, linewidth=1)
         
-        ax2.set_xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
-        ax2.set_ylabel('Completion Time (ms)', fontsize=28, fontfamily='Times New Roman')
-        ax2.legend(prop={'family': 'Times New Roman', 'size': 24})
-        ax2.grid(True, alpha=0.3)
+#         ax2.set_xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
+#         ax2.set_ylabel('Completion Time (ms)', fontsize=28, fontfamily='Times New Roman')
+#         ax2.legend(prop={'family': 'Times New Roman', 'size': 24})
+#         ax2.grid(True, alpha=0.3)
         
-        # Add statistics annotation
-        deadline_met = sum(deadline_status)
-        deadline_missed = len(deadline_status) - deadline_met
-        avg_energy = np.mean(energy)
-        avg_time = np.mean(times)
+#         # Add statistics annotation
+#         deadline_met = sum(deadline_status)
+#         deadline_missed = len(deadline_status) - deadline_met
+#         avg_energy = np.mean(energy)
+#         avg_time = np.mean(times)
         
-        stats_text = f'Episodes: {len(episodes)}\nDeadline Met: {deadline_met} ({deadline_met/len(episodes)*100:.1f}%)\nAvg Energy: {avg_energy:.2f} J\nAvg Time: {avg_time:.1f} ms'
+#         stats_text = f'Episodes: {len(episodes)}\nDeadline Met: {deadline_met} ({deadline_met/len(episodes)*100:.1f}%)\nAvg Energy: {avg_energy:.2f} J\nAvg Time: {avg_time:.1f} ms'
         
-        ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, fontsize=20, 
-                fontfamily='Times New Roman', verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+#         ax1.text(0.02, 0.98, stats_text, transform=ax1.transAxes, fontsize=20, 
+#                 fontfamily='Times New Roman', verticalalignment='top',
+#                 bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
         
-        # Set tick font sizes for both axes
-        for ax in [ax1, ax2]:
-            ax.tick_params(axis='both', which='major', labelsize=24)
-            for label in ax.get_xticklabels():
-                label.set_fontfamily('Times New Roman')
-            for label in ax.get_yticklabels():
-                label.set_fontfamily('Times New Roman')
+#         # Set tick font sizes for both axes
+#         for ax in [ax1, ax2]:
+#             ax.tick_params(axis='both', which='major', labelsize=24)
+#             for label in ax.get_xticklabels():
+#                 label.set_fontfamily('Times New Roman')
+#             for label in ax.get_yticklabels():
+#                 label.set_fontfamily('Times New Roman')
         
-        plt.tight_layout()
+#         plt.tight_layout()
 
 
-# Color-blind safe palette (Okabe–Ito inspired)
-EDGE_COLOR = '#0072B2'     # Blue
-CLOUD_COLOR = '#E69F00'    # Orange
-BALANCED_COLOR = '#999999'
+# # Color-blind safe palette (Okabe–Ito inspired)
+# EDGE_COLOR = '#0072B2'     # Blue
+# CLOUD_COLOR = '#E69F00'    # Orange
+# BALANCED_COLOR = '#999999'
 
 
-def create_node_execution_visualizations(edge_stats, cloud_stats, profiling_data, total_episodes):
-    """
-    Create comprehensive visualizations of node execution statistics
-    using color-blind safe colors only.
-    """
+# def create_node_execution_visualizations(edge_stats, cloud_stats, profiling_data, total_episodes):
+#     """
+#     Create comprehensive visualizations of node execution statistics
+#     using color-blind safe colors only.
+#     """
 
-    # Prepare data
-    nodes_data = []
-    edge_counts = []
-    cloud_counts = []
-    edge_percentages = []
-    cloud_percentages = []
+#     # Prepare data
+#     nodes_data = []
+#     edge_counts = []
+#     cloud_counts = []
+#     edge_percentages = []
+#     cloud_percentages = []
 
-    layer_names = [
-        'v1', 'v2', 'v3',
-        ['v4', 'v7', 'v10'],
-        ['v5', 'v8', 'v11'],
-        ['v6', 'v9', 'v12'],
-        'v13'
-    ]
+#     layer_names = [
+#         'v1', 'v2', 'v3',
+#         ['v4', 'v7', 'v10'],
+#         ['v5', 'v8', 'v11'],
+#         ['v6', 'v9', 'v12'],
+#         'v13'
+#     ]
 
-    for layer_idx, layer_nodes in enumerate(profiling_data.layers):
-        for node_idx in range(len(layer_nodes)):
-            node_key = (layer_idx, node_idx)
+#     for layer_idx, layer_nodes in enumerate(profiling_data.layers):
+#         for node_idx in range(len(layer_nodes)):
+#             node_key = (layer_idx, node_idx)
 
-            edge_count = edge_stats.get(node_key, 0)
-            cloud_count = cloud_stats.get(node_key, 0)
-            total_count = edge_count + cloud_count
+#             edge_count = edge_stats.get(node_key, 0)
+#             cloud_count = cloud_stats.get(node_key, 0)
+#             total_count = edge_count + cloud_count
 
-            if total_count > 0:
-                edge_pct = (edge_count / total_count) * 100
-                cloud_pct = (cloud_count / total_count) * 100
-            else:
-                edge_pct = cloud_pct = 0
+#             if total_count > 0:
+#                 edge_pct = (edge_count / total_count) * 100
+#                 cloud_pct = (cloud_count / total_count) * 100
+#             else:
+#                 edge_pct = cloud_pct = 0
 
-            if len(layer_nodes) == 1:
-                node_label = f"{layer_names[layer_idx]}"
-            else:
-                node_label = layer_names[layer_idx][node_idx]
+#             if len(layer_nodes) == 1:
+#                 node_label = f"{layer_names[layer_idx]}"
+#             else:
+#                 node_label = layer_names[layer_idx][node_idx]
 
-            nodes_data.append(node_label)
-            edge_counts.append(edge_count)
-            cloud_counts.append(cloud_count)
-            edge_percentages.append(edge_pct)
-            cloud_percentages.append(cloud_pct)
+#             nodes_data.append(node_label)
+#             edge_counts.append(edge_count)
+#             cloud_counts.append(cloud_count)
+#             edge_percentages.append(edge_pct)
+#             cloud_percentages.append(cloud_pct)
 
-    df = pd.DataFrame({
-        'Node': nodes_data,
-        'Edge_Executions': edge_counts,
-        'Cloud_Executions': cloud_counts,
-        'Edge_Percentage': edge_percentages,
-        'Cloud_Percentage': cloud_percentages
-    })
+#     df = pd.DataFrame({
+#         'Node': nodes_data,
+#         'Edge_Executions': edge_counts,
+#         'Cloud_Executions': cloud_counts,
+#         'Edge_Percentage': edge_percentages,
+#         'Cloud_Percentage': cloud_percentages
+#     })
 
-    # FIGURE 1: Execution Counts & Percentages
-    fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 14))
-    x = range(len(df))
-    width = 0.7
+#     # FIGURE 1: Execution Counts & Percentages
+#     fig1, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 14))
+#     x = range(len(df))
+#     width = 0.7
 
-    # Execution counts (stacked)
-    ax1.bar(
-        x,
-        df['Edge_Executions'],
-        width,
-        label='Edge Executions',
-        color=EDGE_COLOR
-    )
+#     # Execution counts (stacked)
+#     ax1.bar(
+#         x,
+#         df['Edge_Executions'],
+#         width,
+#         label='Edge Executions',
+#         color=EDGE_COLOR
+#     )
 
-    ax1.bar(
-        x,
-        df['Cloud_Executions'],
-        width,
-        bottom=df['Edge_Executions'],
-        label='Cloud Executions',
-        color=CLOUD_COLOR
-    )
+#     ax1.bar(
+#         x,
+#         df['Cloud_Executions'],
+#         width,
+#         bottom=df['Edge_Executions'],
+#         label='Cloud Executions',
+#         color=CLOUD_COLOR
+#     )
 
-    ax1.set_xlabel('Node', fontsize=28, fontfamily='Times New Roman')
-    ax1.set_ylabel('Execution Count', fontsize=28, fontfamily='Times New Roman')
-    ax1.set_title(f'Edge vs Cloud Execution Counts', 
-                 fontsize=28, fontfamily='Times New Roman')
-    ax1.set_xticks(x)
-    ax1.set_xticklabels(df['Node'], rotation=45, ha='right', 
-                       fontsize=24, fontfamily='Times New Roman')
-    ax1.legend(prop={'family': 'Times New Roman', 'size': 24})
-    ax1.grid(True, axis='y', alpha=0.3)
-    ax1.tick_params(axis='both', labelsize=24)
+#     ax1.set_xlabel('Node', fontsize=28, fontfamily='Times New Roman')
+#     ax1.set_ylabel('Execution Count', fontsize=28, fontfamily='Times New Roman')
+#     ax1.set_title(f'Edge vs Cloud Execution Counts', 
+#                  fontsize=28, fontfamily='Times New Roman')
+#     ax1.set_xticks(x)
+#     ax1.set_xticklabels(df['Node'], rotation=45, ha='right', 
+#                        fontsize=24, fontfamily='Times New Roman')
+#     ax1.legend(prop={'family': 'Times New Roman', 'size': 24})
+#     ax1.grid(True, axis='y', alpha=0.3)
+#     ax1.tick_params(axis='both', labelsize=24)
 
-    # Execution percentages (stacked)
-    ax2.bar(
-        x,
-        df['Edge_Percentage'],
-        width,
-        label='Edge %',
-        color=EDGE_COLOR
-    )
+#     # Execution percentages (stacked)
+#     ax2.bar(
+#         x,
+#         df['Edge_Percentage'],
+#         width,
+#         label='Edge %',
+#         color=EDGE_COLOR
+#     )
 
-    ax2.bar(
-        x,
-        df['Cloud_Percentage'],
-        width,
-        bottom=df['Edge_Percentage'],
-        label='Cloud %',
-        color=CLOUD_COLOR
-    )
+#     ax2.bar(
+#         x,
+#         df['Cloud_Percentage'],
+#         width,
+#         bottom=df['Edge_Percentage'],
+#         label='Cloud %',
+#         color=CLOUD_COLOR
+#     )
 
-    ax2.set_xlabel('Node', fontsize=28, fontfamily='Times New Roman')
-    ax2.set_ylabel('Execution Percentage (%)', fontsize=28, fontfamily='Times New Roman')
-    ax2.set_title('Execution Location Percentages', fontsize=28, fontfamily='Times New Roman')
-    ax2.set_xticks(x)
-    ax2.set_xticklabels(df['Node'], rotation=45, ha='right', 
-                       fontsize=24, fontfamily='Times New Roman')
-    ax2.set_ylim(0, 100)
-    ax2.legend(prop={'family': 'Times New Roman', 'size': 24}, loc="center left",
-    bbox_to_anchor=(1.02, 0.5),
-    frameon=True)
-    ax2.grid(True, axis='y', alpha=0.3)
-    ax2.tick_params(axis='both', labelsize=24)
+#     ax2.set_xlabel('Node', fontsize=28, fontfamily='Times New Roman')
+#     ax2.set_ylabel('Execution Percentage (%)', fontsize=28, fontfamily='Times New Roman')
+#     ax2.set_title('Execution Location Percentages', fontsize=28, fontfamily='Times New Roman')
+#     ax2.set_xticks(x)
+#     ax2.set_xticklabels(df['Node'], rotation=45, ha='right', 
+#                        fontsize=24, fontfamily='Times New Roman')
+#     ax2.set_ylim(0, 100)
+#     ax2.legend(prop={'family': 'Times New Roman', 'size': 24}, loc="center left",
+#     bbox_to_anchor=(1.02, 0.5),
+#     frameon=True)
+#     ax2.grid(True, axis='y', alpha=0.3)
+#     ax2.tick_params(axis='both', labelsize=24)
 
-    plt.tight_layout()
-    plt.savefig(
-        f'node_execution_comparison_{total_episodes}_episodes.png',
-        dpi=600,
-        bbox_inches='tight'
-    )
-    plt.show()
+#     plt.tight_layout()
+#     plt.savefig(
+#         f'node_execution_comparison_{total_episodes}_episodes.png',
+#         dpi=600,
+#         bbox_inches='tight'
+#     )
+#     plt.show()
 
-    # FIGURE 2: Edge Preference by Node
-    fig2, ax = plt.subplots(figsize=(16, 10))
+#     # FIGURE 2: Edge Preference by Node
+#     fig2, ax = plt.subplots(figsize=(16, 10))
 
-    colors = []
-    for pct in edge_percentages:
-        if pct > 70:
-            colors.append(EDGE_COLOR)
-        elif pct >= 30:
-            colors.append(BALANCED_COLOR)
-        else:
-            colors.append(CLOUD_COLOR)
+#     colors = []
+#     for pct in edge_percentages:
+#         if pct > 70:
+#             colors.append(EDGE_COLOR)
+#         elif pct >= 30:
+#             colors.append(BALANCED_COLOR)
+#         else:
+#             colors.append(CLOUD_COLOR)
 
-    bars = ax.bar(nodes_data, edge_percentages, color=colors, edgecolor='black', linewidth=1.5)
+#     bars = ax.bar(nodes_data, edge_percentages, color=colors, edgecolor='black', linewidth=1.5)
 
-    ax.set_xlabel('Node', fontsize=28, fontfamily='Times New Roman')
-    ax.set_ylabel('Edge Execution Percentage (%)', fontsize=28, fontfamily='Times New Roman')
-    ax.set_title(f'Edge Execution Preference by Node', 
-                fontsize=28, fontfamily='Times New Roman')
-    ax.set_ylim(0, 100)
-    ax.grid(True, axis='y', alpha=0.3)
-    plt.xticks(rotation=45, ha='right', fontsize=24, fontfamily='Times New Roman')
-    ax.tick_params(axis='both', labelsize=24)
+#     ax.set_xlabel('Node', fontsize=28, fontfamily='Times New Roman')
+#     ax.set_ylabel('Edge Execution Percentage (%)', fontsize=28, fontfamily='Times New Roman')
+#     ax.set_title(f'Edge Execution Preference by Node', 
+#                 fontsize=28, fontfamily='Times New Roman')
+#     ax.set_ylim(0, 100)
+#     ax.grid(True, axis='y', alpha=0.3)
+#     plt.xticks(rotation=45, ha='right', fontsize=24, fontfamily='Times New Roman')
+#     ax.tick_params(axis='both', labelsize=24)
 
-    for bar, pct in zip(bars, edge_percentages):
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            bar.get_height() + 1,
-            f'{pct:.0f}%',
-            ha='center',
-            va='bottom',
-            fontsize=22,
-            fontfamily='Times New Roman'
-        )
+#     for bar, pct in zip(bars, edge_percentages):
+#         ax.text(
+#             bar.get_x() + bar.get_width() / 2,
+#             bar.get_height() + 1,
+#             f'{pct:.0f}%',
+#             ha='center',
+#             va='bottom',
+#             fontsize=22,
+#             fontfamily='Times New Roman'
+#         )
 
-    legend_elements = [
-        Patch(facecolor=EDGE_COLOR, label='Prefers Edge (>70%)'),
-        Patch(facecolor=BALANCED_COLOR, label='Balanced (30–70%)'),
-        Patch(facecolor=CLOUD_COLOR, label='Prefers Cloudlet (<30%)')
-    ]
+#     legend_elements = [
+#         Patch(facecolor=EDGE_COLOR, label='Prefers Edge (>70%)'),
+#         Patch(facecolor=BALANCED_COLOR, label='Balanced (30–70%)'),
+#         Patch(facecolor=CLOUD_COLOR, label='Prefers Cloudlet (<30%)')
+#     ]
 
-    ax.legend(handles=legend_elements, loc="best",
-    frameon=False, 
-              prop={'family': 'Times New Roman', 'size': 24})
+#     ax.legend(handles=legend_elements, loc="best",
+#     frameon=False, 
+#               prop={'family': 'Times New Roman', 'size': 24})
 
-    plt.tight_layout()
-    plt.savefig(
-        f'edge_preference_{total_episodes}_episodes.png',
-        dpi=600,
-        bbox_inches='tight'
-    )
-    plt.show()
+#     plt.tight_layout()
+#     plt.savefig(
+#         f'edge_preference_{total_episodes}_episodes.png',
+#         dpi=600,
+#         bbox_inches='tight'
+#     )
+#     plt.show()
 
-    # TEXT STATISTICS
-    print("\n" + "=" * 80)
-    print("DETAILED NODE EXECUTION STATISTICS:")
-    print("=" * 80)
-    print(f"{'Node':<10} {'Edge':<10} {'Cloud':<10} {'Total':<10} {'Edge %':<10} {'Cloud %':<10} {'Preference':<12}")
-    print("-" * 80)
+#     # TEXT STATISTICS
+#     print("\n" + "=" * 80)
+#     print("DETAILED NODE EXECUTION STATISTICS:")
+#     print("=" * 80)
+#     print(f"{'Node':<10} {'Edge':<10} {'Cloud':<10} {'Total':<10} {'Edge %':<10} {'Cloud %':<10} {'Preference':<12}")
+#     print("-" * 80)
 
-    for _, row in df.iterrows():
-        total = row['Edge_Executions'] + row['Cloud_Executions']
-        if row['Edge_Percentage'] > 70:
-            pref = "EDGE"
-        elif row['Edge_Percentage'] >= 30:
-            pref = "BALANCED"
-        else:
-            pref = "CLOUD"
+#     for _, row in df.iterrows():
+#         total = row['Edge_Executions'] + row['Cloud_Executions']
+#         if row['Edge_Percentage'] > 70:
+#             pref = "EDGE"
+#         elif row['Edge_Percentage'] >= 30:
+#             pref = "BALANCED"
+#         else:
+#             pref = "CLOUD"
 
-        print(f"{row['Node']:<10} {row['Edge_Executions']:<10} {row['Cloud_Executions']:<10} "
-              f"{total:<10} {row['Edge_Percentage']:<10.1f} {row['Cloud_Percentage']:<10.1f} {pref:<12}")
+#         print(f"{row['Node']:<10} {row['Edge_Executions']:<10} {row['Cloud_Executions']:<10} "
+#               f"{total:<10} {row['Edge_Percentage']:<10.1f} {row['Cloud_Percentage']:<10.1f} {pref:<12}")
 
-    print("=" * 80)
+#     print("=" * 80)
 
-    return df
+#     return df
 
 
-def plot_simple_edge_execution(edge_stats, cloud_stats, profiling_data, total_episodes):
-    fig, ax = plt.subplots(figsize=(14, 8))
+# def plot_simple_edge_execution(edge_stats, cloud_stats, profiling_data, total_episodes):
+#     fig, ax = plt.subplots(figsize=(14, 8))
 
-    nodes = []
-    edge_percentages = []
+#     nodes = []
+#     edge_percentages = []
 
-    for layer_idx, layer_nodes in enumerate(profiling_data.layers):
-        for node_idx in range(len(layer_nodes)):
-            key = (layer_idx, node_idx)
-            edge = edge_stats.get(key, 0)
-            cloud = cloud_stats.get(key, 0)
-            total = edge + cloud
+#     for layer_idx, layer_nodes in enumerate(profiling_data.layers):
+#         for node_idx in range(len(layer_nodes)):
+#             key = (layer_idx, node_idx)
+#             edge = edge_stats.get(key, 0)
+#             cloud = cloud_stats.get(key, 0)
+#             total = edge + cloud
 
-            pct = (edge / total) * 100 if total > 0 else 0
+#             pct = (edge / total) * 100 if total > 0 else 0
 
-            nodes.append(f"L{layer_idx}_N{node_idx}")
-            edge_percentages.append(pct)
+#             nodes.append(f"L{layer_idx}_N{node_idx}")
+#             edge_percentages.append(pct)
 
-    colors = [
-        EDGE_COLOR if p > 70 else CLOUD_COLOR if p < 30 else BALANCED_COLOR
-        for p in edge_percentages
-    ]
+#     colors = [
+#         EDGE_COLOR if p > 70 else CLOUD_COLOR if p < 30 else BALANCED_COLOR
+#         for p in edge_percentages
+#     ]
 
-    bars = ax.bar(nodes, edge_percentages, color=colors, edgecolor='black', linewidth=1.5)
+#     bars = ax.bar(nodes, edge_percentages, color=colors, edgecolor='black', linewidth=1.5)
 
-    ax.set_xlabel('Node', fontsize=28, fontfamily='Times New Roman')
-    ax.set_ylabel('Edge Execution Percentage (%)', fontsize=28, fontfamily='Times New Roman')
-    ax.set_title(f'Edge Execution Percentage by Node ({total_episodes} Episodes)', 
-                fontsize=28, fontfamily='Times New Roman')
-    ax.set_ylim(0, 100)
-    ax.grid(True, axis='y', alpha=0.3)
-    plt.xticks(rotation=45, ha='right', fontsize=24, fontfamily='Times New Roman')
-    ax.tick_params(axis='both', labelsize=24)
+#     ax.set_xlabel('Node', fontsize=28, fontfamily='Times New Roman')
+#     ax.set_ylabel('Edge Execution Percentage (%)', fontsize=28, fontfamily='Times New Roman')
+#     ax.set_title(f'Edge Execution Percentage by Node ({total_episodes} Episodes)', 
+#                 fontsize=28, fontfamily='Times New Roman')
+#     ax.set_ylim(0, 100)
+#     ax.grid(True, axis='y', alpha=0.3)
+#     plt.xticks(rotation=45, ha='right', fontsize=24, fontfamily='Times New Roman')
+#     ax.tick_params(axis='both', labelsize=24)
 
-    plt.tight_layout()
-    plt.savefig(
-        f'simple_edge_stats_{total_episodes}_episodes.png',
-        dpi=600,
-        bbox_inches='tight'
-    )
-    plt.show()
+#     plt.tight_layout()
+#     plt.savefig(
+#         f'simple_edge_stats_{total_episodes}_episodes.png',
+#         dpi=600,
+#         bbox_inches='tight'
+#     )
+#     plt.show()
