@@ -4,7 +4,6 @@ import numpy as np
 import time
 from collections import defaultdict
 import pandas as pd
-from scipy.ndimage import gaussian_filter1d
 
 # # Set global font settings for conference paper quality
 # plt.rcParams['font.family'] = 'serif'
