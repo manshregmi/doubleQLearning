@@ -8,6 +8,8 @@ from a2c.coarse_grained_dq import run_oneshot_doubleQ_simulation
 from a2c.coarse_grained_a2c import run_oneshot_a2c_simulation
 import numpy as np
 
+from simulator.ppo_simulator import run_ppo_simulation
+
 if __name__ == "__main__":
     # Set global font settings for all plots - Times New Roman with conference paper sizes
     plt.rcParams['font.family'] = 'serif'
@@ -27,9 +29,10 @@ if __name__ == "__main__":
     max_steps = 10
     deadlines = list(range(400, 601, 10))  # 400ms to 600ms
     
-    # Your existing methods
+    # existing methods
     dq_energy, dq_time, dq_deadline_misses = [], [], []
     a2c_energy, a2c_time, a2c_deadline_misses = [], [], []
+    ppo_energy, ppo_time, ppo_deadline_misses = [], [], []
     
     # NEW: One-shot baselines
     oneshot_dq_energy, oneshot_dq_time, oneshot_dq_deadline_misses = [], [], []
@@ -72,6 +75,13 @@ if __name__ == "__main__":
             oneshot_dq_energy.append(float('nan'))
             oneshot_dq_time.append(float('nan'))
             oneshot_dq_deadline_misses.append(float('nan'))
+
+        # PPO 
+        ppo_e, ppo_t, ppo_dm = run_ppo_simulation(profiling_data, episodes, max_steps, is_test)
+        ppo_energy.append(ppo_e)
+        ppo_time.append(ppo_t)
+        ppo_deadline_misses.append(ppo_dm/episodes)
+    
         
     #     # try:
     #     #     oneshot_a2c_e, oneshot_a2c_t, oneshot_a2c_dm = run_oneshot_a2c_simulation(
@@ -147,7 +157,7 @@ if __name__ == "__main__":
     plt.figure(figsize=(14, 8))
     plt.plot(deadlines, dq_deadline_misses, label="Level-wise DQ", marker='o', linewidth=3)
     plt.plot(deadlines, a2c_deadline_misses, label="Level-wise A2C", marker='*', linewidth=3)
-    # plt.plot(deadlines, edge_deadline_misses, label="All Edge", marker='x', linewidth=3)
+    plt.plot(deadlines, ppo_deadline_misses, label="Level-wise PPO", marker='x', linewidth=3)
     plt.plot(deadlines, cloud_dadline_misses, label="All Cloud", marker='+', linewidth=3)
     plt.plot(deadlines, random_deadline_misses, label="Random", marker='^', linewidth=3)
 
