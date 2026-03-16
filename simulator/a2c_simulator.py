@@ -1,4 +1,3 @@
-from matplotlib.patches import Patch
 from a2c.actor_critic_agent import TabularActorCriticAgent
 from profiling.profile import ProfilingData
 import numpy as np
