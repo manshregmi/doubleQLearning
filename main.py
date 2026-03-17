@@ -1,6 +1,5 @@
 import random
 from profiling.initialize_profiling import get_profiling_data
-import matplotlib.pyplot as plt
 from reference_schedulers.random_scheduler import run_random_scheduler
 from simulator.a2c_simulator import run_a2c_simulation
 from simulator.doubleQ_simulator import run_simulation
@@ -11,17 +10,17 @@ import numpy as np
 from simulator.ppo_simulator import run_ppo_simulation
 
 if __name__ == "__main__":
-    # Set global font settings for all plots - Times New Roman with conference paper sizes
-    plt.rcParams['font.family'] = 'serif'
-    plt.rcParams['font.serif'] = ['Times New Roman']
-    plt.rcParams['axes.titlesize'] = 28
-    plt.rcParams['axes.labelsize'] = 28
-    plt.rcParams['xtick.labelsize'] = 24
-    plt.rcParams['ytick.labelsize'] = 24
-    plt.rcParams['legend.fontsize'] = 24
-    plt.rcParams['figure.titlesize'] = 28
-    plt.rcParams['lines.linewidth'] = 3
-    plt.rcParams['lines.markersize'] = 10
+    # # Set global font settings for all plots - Times New Roman with conference paper sizes
+    # plt.rcParams['font.family'] = 'serif'
+    # plt.rcParams['font.serif'] = ['Times New Roman']
+    # plt.rcParams['axes.titlesize'] = 28
+    # plt.rcParams['axes.labelsize'] = 28
+    # plt.rcParams['xtick.labelsize'] = 24
+    # plt.rcParams['ytick.labelsize'] = 24
+    # plt.rcParams['legend.fontsize'] = 24
+    # plt.rcParams['figure.titlesize'] = 28
+    # plt.rcParams['lines.linewidth'] = 3
+    # plt.rcParams['lines.markersize'] = 10
     
     is_test = False
     episodes = 100
