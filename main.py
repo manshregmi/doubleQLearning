@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # plt.rcParams['lines.markersize'] = 10
     
     is_test = False
-    episodes = 10000
+    episodes = 1000
     # episodes = 100
     max_steps = 10
     deadlines = list(range(400, 401, 10))  # 400ms to 600ms
