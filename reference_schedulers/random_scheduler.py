@@ -1,6 +1,5 @@
 import random
 import numpy as np
-import matplotlib.pyplot as plt
 from simulator.simulator import CloudEdgeSimulator
 from profiling.profile import ProfilingData
 
