@@ -23,10 +23,10 @@ if __name__ == "__main__":
     # plt.rcParams['lines.markersize'] = 10
     
     is_test = False
-    episodes = 100
+    episodes = 10000
     # episodes = 100
     max_steps = 10
-    deadlines = list(range(400, 601, 10))  # 400ms to 600ms
+    deadlines = list(range(400, 401, 10))  # 400ms to 600ms
     
     # existing methods
     dq_energy, dq_time, dq_deadline_misses = [], [], []

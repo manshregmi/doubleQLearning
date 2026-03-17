@@ -20,7 +20,7 @@ import pandas as pd
 
 def run_a2c_simulation(
     profiling_data: ProfilingData,
-    episodes=1,
+    episodes=10000,
     max_steps=20,
     is_test=False,
     visualize_stats=True,
