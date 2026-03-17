@@ -113,6 +113,7 @@ def run_ppo_simulation(
                         cloud_execution_stats[key] += 1
 
             bandwidth = next_state[0]
+            cloud_time = next_state[1]
 
             prev_neg = current_state[5]
             neg_increased = neg_count > prev_neg
