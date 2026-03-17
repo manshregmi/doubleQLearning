@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -150,7 +151,12 @@ class PPOAgent:
 
     def train(self, state):
 
+        start_time = time.time()
+
         action = self.choose_action(state)
+
+        end_time = time.time()
+        descision_time_ms = (end_time - start_time) * 1000
 
         next_cloud = self.simulator.get_next_state_cloud_waiting_time(
             next_layer=min(
@@ -201,6 +207,7 @@ class PPOAgent:
             surplus,
             fractional_deadline,
             neg_count,
+            descision_time_ms
         )
 
     # ================= GAE =================

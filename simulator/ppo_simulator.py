@@ -40,6 +40,8 @@ def run_ppo_simulation(
     print(f"Starting PPO simulation at: {start_time}")
     bandwidth = profiling_data.bandwidth
 
+    episode_overhead_time_ms = []
+
     for ep in range(episodes):
         total_energy = 0.0
         total_time = 0.0
@@ -50,6 +52,7 @@ def run_ppo_simulation(
 
         trajectory = []
         step_surpluses = []
+        step_overhead_time_ms = 0
 
         for step in range(max_steps):
             try:
@@ -64,7 +67,9 @@ def run_ppo_simulation(
                     surplus,
                     fractional_deadline,
                     neg_count,
+                    descision_time_ms
                 ) = agent.train(current_state)
+                step_overhead_time_ms += descision_time_ms
             except Exception as e:
                 print(f"Error in training step: {e}")
                 # Fallback: take random action
@@ -137,7 +142,7 @@ def run_ppo_simulation(
 
             if terminal:
                 break
-
+        episode_overhead_time_ms.append(step_overhead_time_ms)
         # Reward reshaping
         if trajectory:
             avg_step_reward = np.clip(
@@ -193,6 +198,8 @@ def run_ppo_simulation(
 
     # Calculate statistics
     elapsed_time = time.time() - start_time
+
+    print("PPO overhead time (ms): ", np.mean(episode_overhead_time_ms), "±", np.std(episode_overhead_time_ms), "ms", "removing warm up time average overhead(ms)", np.mean(episode_overhead_time_ms[100:]), "±", np.std(episode_overhead_time_ms[100:]), "ms")
     print(f"\nPPO Simulation completed in {elapsed_time:.2f} seconds")
     print(f"Average Energy: {np.mean(edge_energy):.2f} J")
     print(f"Average Completion Time: {np.mean(completion_time):.2f} ms")
