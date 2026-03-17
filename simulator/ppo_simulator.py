@@ -1,8 +1,8 @@
-from random import random
 from a2c.ppo_agent import PPOAgent
 from profiling.profile import ProfilingData
 import numpy as np
 import time
+import random
 from collections import defaultdict
 
 
@@ -17,12 +17,7 @@ def run_ppo_simulation(
     PPO simulator that exactly matches A2C's logical flow
     """
     agent = PPOAgent(profiling_data, is_test=is_test)
-    
-    # Try to load existing model
-    try:
-        agent.load()
-    except Exception as e:
-        print(f"Could not load existing model: {e}. Starting with fresh weights.")
+    agent.load()
     
     # Metrics tracking
     edge_energy = []
@@ -30,7 +25,6 @@ def run_ppo_simulation(
     rewards = []
     cumulative_rewards = []
     
-    # Track rewards per episode
     episode_rewards = []
     episode_modified_rewards = []
 
@@ -38,7 +32,6 @@ def run_ppo_simulation(
     deadline_met_count = 0
     layer_violation_stats = defaultdict(int)
     
-    # Execution statistics
     if visualize_stats:
         edge_execution_stats = defaultdict(int)
         cloud_execution_stats = defaultdict(int)
@@ -46,6 +39,8 @@ def run_ppo_simulation(
     start_time = time.time()
     print(f"Starting PPO simulation at: {start_time}")
     bandwidth = profiling_data.bandwidth
+
+    overhead_times = []
 
     for ep in range(episodes):
         total_energy = 0.0
@@ -57,6 +52,7 @@ def run_ppo_simulation(
 
         trajectory = []
         step_surpluses = []
+        step_overhead_times = 0
 
         for step in range(max_steps):
             try:
@@ -71,15 +67,16 @@ def run_ppo_simulation(
                     surplus,
                     fractional_deadline,
                     neg_count,
+                    overhead_step_time_ms
                 ) = agent.train(current_state)
+                step_overhead_times += overhead_step_time_ms
             except Exception as e:
                 print(f"Error in training step: {e}")
                 # Fallback: take random action
                 layer = int(current_state[2])
                 possible_actions = agent._get_possible_actions(layer)
-                action = possible_actions[np.random.randint(len(possible_actions))]
+                action = random.choice(possible_actions)
                 
-                # Re-run with random action
                 next_cloud = agent.simulator.get_next_state_cloud_waiting_time(
                     next_layer=min(layer + 1, len(profiling_data.layers) - 1),
                     current_action=action,
@@ -125,7 +122,6 @@ def run_ppo_simulation(
             prev_neg = current_state[5]
             neg_increased = neg_count > prev_neg
 
-            # Store trajectory step
             trajectory.append({
                 "original_reward": reward,
                 "reward": reward,
@@ -146,12 +142,15 @@ def run_ppo_simulation(
 
             if terminal:
                 break
-
+        overhead_times.append(step_overhead_times)
         # Reward reshaping
-        avg_step_reward = np.clip(
-            np.mean([abs(s["original_reward"]) for s in trajectory]),
-            300.0, 3000.0
-        )
+        if trajectory:
+            avg_step_reward = np.clip(
+                np.mean([abs(s["original_reward"]) for s in trajectory if s["original_reward"] != 0]),
+                300.0, 3000.0
+            )
+        else:
+            avg_step_reward = 300.0
 
         deadline_violated = total_time > profiling_data.deadline
 
@@ -177,10 +176,10 @@ def run_ppo_simulation(
             step["reward"] = np.clip(step["reward"], -500.0, 50.0)
 
         # Update agent at episode end
-        if not is_test:
+        if not is_test and trajectory:
             agent.notify_episode_end(sum(step["reward"] for step in trajectory))
 
-        modified_reward = sum(step["reward"] for step in trajectory)
+        modified_reward = sum(step["reward"] for step in trajectory) if trajectory else 0
 
         # Store metrics
         edge_energy.append(total_energy)
@@ -207,6 +206,8 @@ def run_ppo_simulation(
 
     # Save agent
     agent.save()
+
+    print("overhead times (ms):", np.mean(overhead_times), "±", np.std(overhead_times), "total overhead time (s):", np.sum(overhead_times) / 1000.0, "per episode overhead time (ms):", np.mean(overhead_times), "±", np.std(overhead_times), "removing 100 warmup episodes overhead time (s):", np.sum(overhead_times[100:]) / 1000.0, "after warm up per episode overhead time (ms):", np.mean(overhead_times[100:]), "±", np.std(overhead_times[100:]))
     
     return (
         np.mean(edge_energy),
