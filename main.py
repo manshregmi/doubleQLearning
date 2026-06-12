@@ -25,7 +25,7 @@ if __name__ == "__main__":
     episodes = 100000
     # episodes = 100
     max_steps = 10
-    deadlines = list(range(400, 601, 10))  # 400ms to 600ms
+    deadlines = list(range(500, 501, 10))  # 500ms to 510ms
     
     # Your existing methods
     dq_energy, dq_time, dq_deadline_misses = [], [], []
@@ -48,30 +48,30 @@ if __name__ == "__main__":
         profiling_data = get_profiling_data(d, 8)
 
         # Your level-wise methods
-        e, t, dm = run_simulation(profiling_data, episodes, max_steps, is_test)
-        dq_energy.append(e)
-        dq_time.append(t)
-        dq_deadline_misses.append(dm/episodes)
+        # e, t, dm = run_simulation(profiling_data, episodes, max_steps, is_test)
+        # dq_energy.append(e)
+        # dq_time.append(t)
+        # dq_deadline_misses.append(dm/episodes)
 
         a2c_e, a2c_t, a2c_dm = run_a2c_simulation(profiling_data, episodes, max_steps, is_test)
         a2c_energy.append(a2c_e)
         a2c_time.append(a2c_t)
         a2c_deadline_misses.append(a2c_dm/episodes)
-        print("average energy is ", a2c_e, a2c_t)
+        print(f"average energy is {a2c_e}, average time is {a2c_t} and deadline miss rate is {a2c_dm/episodes}")
         
         # NEW: One-shot baselines
-        try:
-            oneshot_dq_e, oneshot_dq_t, oneshot_dq_dm = run_oneshot_doubleQ_simulation(
-                profiling_data, episodes, max_steps, is_test
-            )
-            oneshot_dq_energy.append(oneshot_dq_e)
-            oneshot_dq_time.append(oneshot_dq_t)
-            oneshot_dq_deadline_misses.append(oneshot_dq_dm/episodes)
-        except Exception as e:
-            print(f"Error running one-shot DQ: {e}")
-            oneshot_dq_energy.append(float('nan'))
-            oneshot_dq_time.append(float('nan'))
-            oneshot_dq_deadline_misses.append(float('nan'))
+        # try:
+        #     oneshot_dq_e, oneshot_dq_t, oneshot_dq_dm = run_oneshot_doubleQ_simulation(
+        #         profiling_data, episodes, max_steps, is_test
+        #     )
+        #     oneshot_dq_energy.append(oneshot_dq_e)
+        #     oneshot_dq_time.append(oneshot_dq_t)
+        #     oneshot_dq_deadline_misses.append(oneshot_dq_dm/episodes)
+        # except Exception as e:
+        #     print(f"Error running one-shot DQ: {e}")
+        #     oneshot_dq_energy.append(float('nan'))
+        #     oneshot_dq_time.append(float('nan'))
+        #     oneshot_dq_deadline_misses.append(float('nan'))
         
     #     # try:
     #     #     oneshot_a2c_e, oneshot_a2c_t, oneshot_a2c_dm = run_oneshot_a2c_simulation(
@@ -87,20 +87,20 @@ if __name__ == "__main__":
     #     #     oneshot_a2c_deadline_misses.append(float('nan'))
 
         # Baseline methods
-        re, rt, random_deadline_missed = run_random_scheduler(profiling_data, episodes, max_steps, is_random=True, is_all_cloud=False)
-        random_energy.append(re)
-        random_time.append(rt)
-        random_deadline_misses.append(random_deadline_missed/episodes)
+        # re, rt, random_deadline_missed = run_random_scheduler(profiling_data, episodes, max_steps, is_random=True, is_all_cloud=False)
+        # random_energy.append(re)
+        # random_time.append(rt)
+        # random_deadline_misses.append(random_deadline_missed/episodes)
 
         # ee, et, edge_deadline_missed = run_random_scheduler(profiling_data, 1000, max_steps, is_random=False, is_all_cloud=False)
         # edge_energy.append(ee)
         # edge_time.append(et)
         # edge_deadline_misses.append(edge_deadline_missed/1000)
 
-        ce, ct, cloud_deadline_missed = run_random_scheduler(profiling_data, 1000, max_steps, is_random=False, is_all_cloud=True)
-        cloud_energy.append(ce)
-        cloud_time.append(ct)
-        cloud_dadline_misses.append(cloud_deadline_missed/1000)
+        # ce, ct, cloud_deadline_missed = run_random_scheduler(profiling_data, 1000, max_steps, is_random=False, is_all_cloud=True)
+        # cloud_energy.append(ce)
+        # cloud_time.append(ct)
+        # cloud_dadline_misses.append(cloud_deadline_missed/1000)
 
 
     # FIX: Remove NaN values for plotting
@@ -143,42 +143,42 @@ if __name__ == "__main__":
     # plt.savefig("energy_vs_deadline_comparison.png", dpi=600)
     # plt.show()
 
-    # Plot 2: Deadline Miss Rate vs Deadline
-    plt.figure(figsize=(14, 8))
-    plt.plot(deadlines, dq_deadline_misses, label="Level-wise DQ", marker='o', linewidth=3)
-    plt.plot(deadlines, a2c_deadline_misses, label="Level-wise A2C", marker='*', linewidth=3)
-    # plt.plot(deadlines, edge_deadline_misses, label="All Edge", marker='x', linewidth=3)
-    plt.plot(deadlines, cloud_dadline_misses, label="All Cloud", marker='+', linewidth=3)
-    plt.plot(deadlines, random_deadline_misses, label="Random", marker='^', linewidth=3)
+    # # Plot 2: Deadline Miss Rate vs Deadline
+    # plt.figure(figsize=(14, 8))
+    # plt.plot(deadlines, dq_deadline_misses, label="Level-wise DQ", marker='o', linewidth=3)
+    # plt.plot(deadlines, a2c_deadline_misses, label="Level-wise A2C", marker='*', linewidth=3)
+    # # plt.plot(deadlines, edge_deadline_misses, label="All Edge", marker='x', linewidth=3)
+    # plt.plot(deadlines, cloud_dadline_misses, label="All Cloud", marker='+', linewidth=3)
+    # plt.plot(deadlines, random_deadline_misses, label="Random", marker='^', linewidth=3)
 
-    # Plot one-shot methods only if they have data
-    if any(not np.isnan(v) for v in oneshot_dq_deadline_misses):
-        clean_deadlines, clean_oneshot_dq = remove_nan(deadlines, oneshot_dq_deadline_misses)
-        if clean_deadlines:
-            plt.plot(clean_deadlines, clean_oneshot_dq, label="Coarse grained", marker='s', linestyle='--', linewidth=2)
+    # # Plot one-shot methods only if they have data
+    # if any(not np.isnan(v) for v in oneshot_dq_deadline_misses):
+    #     clean_deadlines, clean_oneshot_dq = remove_nan(deadlines, oneshot_dq_deadline_misses)
+    #     if clean_deadlines:
+    #         plt.plot(clean_deadlines, clean_oneshot_dq, label="Coarse grained", marker='s', linestyle='--', linewidth=2)
     
     # if any(not np.isnan(v) for v in oneshot_a2c_deadline_misses):
     #     clean_deadlines, clean_oneshot_a2c = remove_nan(deadlines, oneshot_a2c_deadline_misses)
     #     if clean_deadlines:
     #         plt.plot(clean_deadlines, clean_oneshot_a2c, label="Coarse grained A2C", marker='^', linestyle='--', linewidth=2)
     
-    plt.xlabel("Deadline (ms)", fontsize=28, fontfamily='Times New Roman')
-    plt.ylabel("Deadline Miss Rate (%)", fontsize=28, fontfamily='Times New Roman')
-    # plt.title("Deadline Miss Rate vs Deadline", fontsize=28, fontfamily='Times New Roman')
-    # plt.legend(fontsize=24, loc='best')
-    plt.legend(
-    loc="lower center",
-    bbox_to_anchor=(0.5, 1.02),
-    ncol=2,   # increase if you have many entries
-    frameon=False,
-    prop={'family': 'Times New Roman', 'size': 24}
-)
-    plt.grid(True, linestyle="--", alpha=0.6)
-    plt.xticks(fontsize=24, fontfamily='Times New Roman')
-    plt.yticks(fontsize=24, fontfamily='Times New Roman')
-    plt.tight_layout()
-    plt.savefig("deadline_misses_comparison.png", dpi=600)
-    plt.show()
+#     plt.xlabel("Deadline (ms)", fontsize=28, fontfamily='Times New Roman')
+#     plt.ylabel("Deadline Miss Rate (%)", fontsize=28, fontfamily='Times New Roman')
+#     # plt.title("Deadline Miss Rate vs Deadline", fontsize=28, fontfamily='Times New Roman')
+#     # plt.legend(fontsize=24, loc='best')
+#     plt.legend(
+#     loc="lower center",
+#     bbox_to_anchor=(0.5, 1.02),
+#     ncol=2,   # increase if you have many entries
+#     frameon=False,
+#     prop={'family': 'Times New Roman', 'size': 24}
+# )
+#     plt.grid(True, linestyle="--", alpha=0.6)
+#     plt.xticks(fontsize=24, fontfamily='Times New Roman')
+#     plt.yticks(fontsize=24, fontfamily='Times New Roman')
+#     plt.tight_layout()
+#     plt.savefig("deadline_misses_comparison.png", dpi=600)
+#     plt.show()
 
     # # Helper function for bar charts
     # def create_bar_chart(deadline_value, deadline_idx, suffix=""):

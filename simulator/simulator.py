@@ -204,8 +204,8 @@ class CloudEdgeSimulator:
         # RL convention: lower cost → higher reward
         reward *= -1.0
 
-        return reward, surplus_ms, negative_surplus_count, fractional_deadline_ms
-
+        # return reward, surplus_ms, negative_surplus_count, fractional_deadline_ms
+        return reward, 0, negative_surplus_count, fractional_deadline_ms
 
 
 
