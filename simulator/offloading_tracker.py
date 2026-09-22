@@ -1,312 +1,387 @@
 import numpy as np
-from collections import defaultdict, Counter
-import json
-import matplotlib.pyplot as plt
+import random
+import pandas as pd
+from bisect import bisect_left
+from typing import List, Tuple, Optional
+from profiling.profile import ProfilingData
 
-class OffloadingStatsTracker:
-    """
-    Tracks offloading statistics for DNN nodes across episodes.
-    Works alongside any RL agent that uses the action format:
-    np.array([[level, decision]]) where decision: 0=edge, 1=cloudlet
-    """
-    
-    def __init__(self, profiling_data):
-        """
-        Args:
-            profiling_data: ProfilingData instance with layer/node info
-        """
+
+class NetworkTraceTracker:
+    def __init__(self, trace_data: List[Tuple[float, float, float]]):
+        if not trace_data:
+            raise ValueError("No trace data provided")
+        trace_data.sort(key=lambda x: x[0])
+        self.timestamps = np.array([t for t, _, _ in trace_data], dtype=float)
+        self.bandwidths = np.array([bw for _, bw, _ in trace_data], dtype=float)
+        self.rtts = np.array([rtt for _, _, rtt in trace_data], dtype=float)
+        self.min_timestamp = float(self.timestamps[0])
+        self.normalized_timestamps = self.timestamps - self.min_timestamp
+        
+        print(f"✅ Trace loaded: {len(trace_data)} samples")
+        print(f"   BW range: {self.bandwidths.min():.2f} - {self.bandwidths.max():.2f} MBps")
+        print(f"   RTT range: {self.rtts.min():.2f} - {self.rtts.max():.2f} ms")
+
+    def get_bandwidth_at_time(self, time_seconds: float, use_normalized: bool = False) -> float:
+        query = time_seconds if use_normalized else time_seconds - self.min_timestamp
+        if query <= self.normalized_timestamps[0]:
+            return float(self.bandwidths[0])
+        if query >= self.normalized_timestamps[-1]:
+            return float(self.bandwidths[-1])
+        idx = bisect_left(self.normalized_timestamps, query)
+        t0, t1 = self.normalized_timestamps[idx-1], self.normalized_timestamps[idx]
+        b0, b1 = self.bandwidths[idx-1], self.bandwidths[idx]
+        ratio = (query - t0) / (t1 - t0)
+        return float(max(0.5, b0 + ratio * (b1 - b0)))
+
+    def get_rtt_at_time(self, time_seconds: float, use_normalized: bool = False) -> float:
+        query = time_seconds if use_normalized else time_seconds - self.min_timestamp
+        if query <= self.normalized_timestamps[0]:
+            return float(self.rtts[0])
+        if query >= self.normalized_timestamps[-1]:
+            return float(self.rtts[-1])
+        idx = bisect_left(self.normalized_timestamps, query)
+        t0, t1 = self.normalized_timestamps[idx-1], self.normalized_timestamps[idx]
+        r0, r1 = self.rtts[idx-1], self.rtts[idx]
+        ratio = (query - t0) / (t1 - t0)
+        return float(max(0.0, r0 + ratio * (r1 - r0)))
+
+
+class CloudEdgeSimulator:
+    def __init__(self, profiling_data: ProfilingData,
+                 trace_csv_path: Optional[str] = None,
+                 timeout_threshold_ms: float = 150.0):
         self.profiling = profiling_data
+
+        self.trace_tracker = None
+        if trace_csv_path:
+            try:
+                df = pd.read_csv(trace_csv_path)
+                df = df.dropna(subset=['timestamp', 'bandwidth_mbps', 'rtt_ms'])
+                trace_data = list(zip(
+                    df['timestamp'].astype(float),
+                    df['bandwidth_mbps'].astype(float),
+                    df['rtt_ms'].astype(float)
+                ))
+                if trace_data:
+                    self.trace_tracker = NetworkTraceTracker(trace_data)
+            except Exception as e:
+                print(f"⚠️ Could not load trace: {e}")
+
+        self.cumulative_time_seconds = 0.0
+        self.episode_offset = 0.0
+        self.cumulative_energy_joules = 0.0
+
+        self.timeout_threshold_ms = timeout_threshold_ms
+        self.optimistic_chain_start = -1
+        self.data_location = 'EDGE'
+        self.optimistic_chain_length = 0
+        self.last_timeout_occurred = False
+        self.last_action_mode = -1  # Track action for debugging
+
+        self.edge_idle_power = getattr(profiling_data, 'edge_idle_power', 1.0)
+        self.edge_comm_power = getattr(profiling_data, 'edge_communication_power', 2.0)
+
+    def reset_episode_time(self):
+        self.cumulative_time_seconds = 0.0
+        self.cumulative_energy_joules = 0.0
+        if self.trace_tracker:
+            max_time = self.trace_tracker.normalized_timestamps[-1]
+            self.episode_offset = random.uniform(0, max_time * 0.7)
+        else:
+            self.episode_offset = 0.0
+        self.optimistic_chain_start = -1
+        self.data_location = 'EDGE'
+        self.optimistic_chain_length = 0
+        self.last_timeout_occurred = False
+        self.last_action_mode = -1
+
+    def get_current_bandwidth(self) -> float:
+        if self.trace_tracker:
+            query = self.cumulative_time_seconds + self.episode_offset
+            bw = self.trace_tracker.get_bandwidth_at_time(query, use_normalized=True)
+            return float(max(0.5, bw))
+        else:
+            return random.uniform(2.0, 15.0)
+
+    def get_current_rtt(self) -> float:
+        if self.trace_tracker:
+            query = self.cumulative_time_seconds + self.episode_offset
+            return self.trace_tracker.get_rtt_at_time(query, use_normalized=True)
+        else:
+            return float(self.profiling.rtt)
+
+    def get_possible_actions(self, layer):
+        if layer >= len(self.profiling.layers):
+            return []
+        nodes = self.profiling.get_num_nodes(layer)
+        if layer == len(self.profiling.layers) - 1:
+            a = np.zeros((nodes, 2), dtype=int)
+            a[:, 0] = layer
+            return [a]
+
+        actions = []
+        for pattern in range(3 ** nodes):
+            a = np.zeros((nodes, 2), dtype=int)
+            a[:, 0] = layer
+            temp = pattern
+            for i in range(nodes):
+                a[i, 1] = temp % 3
+                temp //= 3
+            actions.append(a)
+        return actions
+
+    def get_next_state_cloud_waiting_time(self, next_layer, current_action, isAllCloud=False):
+        layer = int(next_layer)
+        cloud_nodes = np.where((current_action[:, 1] == 1) | (current_action[:, 1] == 2))[0]
+
+        if not isAllCloud:
+            n_competing = random.randint(0, self.profiling.numberOfEdgeDevice - 1)
+            congestion = abs(self.profiling.get_max_layer_cloud_time(layer) * n_competing *
+                             np.random.uniform(0.1, 0.5))
+        else:
+            congestion = 0.0
+
+        new_cloud_pending = congestion
+        if len(cloud_nodes) > 0:
+            cloud_proc_ms = max(self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes)
+            new_cloud_pending += max(0.0, cloud_proc_ms)
+
+        if isAllCloud and len(cloud_nodes) > 0:
+            cloud_proc_ms = max(self.profiling.get_node_cloud_time(layer, i) for i in cloud_nodes)
+            new_cloud_pending = cloud_proc_ms * self.profiling.numberOfEdgeDevice
+
+        return new_cloud_pending
+
+    def get_next_state(self, current_state, action, new_cloud_pending, surplus, neg_count):
+        _, _, _, layer, _ = current_state[:5]
+        layer = int(layer)
+
+        bw = self.get_current_bandwidth()
+        rtt = self.get_current_rtt()
+
+        if layer + 1 < len(self.profiling.layers):
+            next_layer = layer + 1
+            terminal = False
+        else:
+            next_layer = layer
+            terminal = True
+
+        prev_action_pattern = tuple(int(x) for x in action[:, 1])
+
+        next_state = (
+            bw,
+            rtt,
+            new_cloud_pending,
+            next_layer,
+            prev_action_pattern,
+            surplus,
+            neg_count,
+            self.optimistic_chain_length
+        )
+        return next_state, terminal
+
+    def compute_energy_and_time(self, current_state, current_action, cloud_pending_ms):
+        bandwidth, rtt_ms, _, layer, prev_action, _, _, _ = current_state
+        layer = int(layer)
+
+        action_values = current_action[:, 1]
+        action_mode = int(np.max(action_values))
+        self.last_action_mode = action_mode  # Track for debugging
+
+        profiling = self.profiling
+        deps = profiling.dependencies
+
+        # ---------- Transmission times ----------
+        tx_to_cloud = 0.0
+        rx_from_cloud = 0.0
+        transmission_times = []
+        offloaded = (action_mode == 1 or action_mode == 2)
+
+        # SAFETY: Ensure bandwidth is never too small
+        safe_bw = max(bandwidth, 0.5)
+
+        if prev_action is not None and layer > 0:
+            prev_assignments = np.asarray(prev_action, dtype=int)
+            curr_assignments = np.asarray(current_action[:, 1], dtype=int)
+
+            for curr_node in range(len(curr_assignments)):
+                parent_nodes = deps.get((layer, curr_node), [])
+                for (p_layer, p_node) in parent_nodes:
+                    if p_layer == layer - 1:
+                        parent_loc = prev_assignments[p_node] if p_node < len(prev_assignments) else 0
+                    else:
+                        parent_loc = 0
+                    curr_loc = curr_assignments[curr_node]
+
+                    if parent_loc != curr_loc:
+                        output_size = profiling.get_output_size(layer, curr_node)  # KB
+                        # Convert KB to MB, divide by bandwidth (MBps)
+                        data_mb = output_size / 1024.0
+                        tx_time = max(
+                            data_mb / safe_bw,
+                            rtt_ms / 1000.0
+                        )
+                        
+                        # DEBUG: Catch suspicious values
+                        if tx_time > 10.0:
+                            print(f"⚠️ WARNING: tx_time={tx_time:.2f}s | Layer {layer}, Node {curr_node}")
+                            print(f"   output_size={output_size}KB, bandwidth={bandwidth:.2f}MBps")
+                            print(f"   data_mb={data_mb:.2f}MB, data_mb/safe_bw={data_mb/safe_bw:.2f}s")
+                        
+                        transmission_times.append(tx_time)
+                        if curr_loc in [1, 2]:
+                            tx_to_cloud = max(tx_to_cloud, tx_time)
+                        else:
+                            rx_from_cloud = max(rx_from_cloud, tx_time)
+        else:
+            if offloaded:
+                input_size = profiling.get_input_size()  # KB
+                data_mb = input_size / 1024.0
+                tx_time = max(
+                    data_mb / safe_bw,
+                    rtt_ms / 1000.0
+                )
+                if tx_time > 10.0:
+                    print(f"⚠️ WARNING: First layer tx_time={tx_time:.2f}s | input_size={input_size}KB")
+                transmission_times.append(tx_time)
+                tx_to_cloud = tx_time
+
+        # Conservative (2) => immediate send-back
+        if action_mode == 2:
+            output_sizes = [profiling.get_output_size(layer, i) for i in range(len(current_action))]
+            max_out = max(output_sizes) if output_sizes else 0
+            data_mb = max_out / 1024.0
+            rx_time = max(
+                data_mb / safe_bw,
+                rtt_ms / 1000.0
+            )
+            if rx_time > 10.0:
+                print(f"⚠️ WARNING: Conservative rx_time={rx_time:.2f}s | max_out={max_out}KB")
+            transmission_times.append(rx_time)
+            rx_from_cloud = max(rx_from_cloud, rx_time)
+
+        max_transmission_time = max(transmission_times) if transmission_times else 0.0
+
+        # ---------- Edge computation ----------
+        edge_times = []
+        edge_energy = []
+        for i in range(len(current_action)):
+            if current_action[i, 1] == 0:
+                node_t_s = profiling.get_node_edge_time(layer, i) / 1000.0
+                node_p = profiling.get_node_edge_power(layer, i)
+                edge_times.append(node_t_s)
+                edge_energy.append(node_p * node_t_s)
+
+        if layer in [3, 5]:
+            edge_total_time_s = max(edge_times) if edge_times else 0.0
+            edge_energy_total = max(edge_energy) if edge_energy else 0.0
+        else:
+            edge_total_time_s = sum(edge_times)
+            edge_energy_total = sum(edge_energy)
+
+        # ---------- Cloud idle/waiting ----------
+        actual_idle_time_s = 0.0
+        if offloaded:
+            cloud_pending_s = cloud_pending_ms / 1000.0
+            actual_idle_time_s = max(0.0, cloud_pending_s - edge_total_time_s)
+
+        # ---------- Timeout check ----------
+        total_wait_s = tx_to_cloud + cloud_pending_ms/1000.0 + rx_from_cloud
+        recompute_energy = 0.0
+        recompute_time = 0.0
+        self.last_timeout_occurred = False
+
+        # Only check timeout if offloaded
+        if offloaded and total_wait_s * 1000 > self.timeout_threshold_ms:
+            self.last_timeout_occurred = True
+
+            if action_mode == 2:   # Conservative: recompute ONLY current layer
+                for i in range(len(current_action)):
+                    if current_action[i, 1] != 0:
+                        node_t_s = profiling.get_node_edge_time(layer, i) / 1000.0
+                        node_p = profiling.get_node_edge_power(layer, i)
+                        recompute_time += node_t_s
+                        recompute_energy += node_p * node_t_s
+
+            elif action_mode == 1:   # Optimistic: recompute from chain_start to current
+                if self.optimistic_chain_start != -1:
+                    # Only recompute from chain_start to current (not all layers)
+                    for l in range(self.optimistic_chain_start, layer + 1):
+                        nodes = profiling.get_num_nodes(l)
+                        for i in range(nodes):
+                            # Only recompute nodes that were offloaded (we don't know which, so all)
+                            node_t_s = profiling.get_node_edge_time(l, i) / 1000.0
+                            node_p = profiling.get_node_edge_power(l, i)
+                            recompute_time += node_t_s
+                            recompute_energy += node_p * node_t_s
+
+        # ---------- Energy ----------
+        idle_energy = self.edge_idle_power * actual_idle_time_s
+        comm_energy = self.edge_comm_power * (tx_to_cloud + rx_from_cloud)
+        total_energy = edge_energy_total + idle_energy + comm_energy + recompute_energy
+
+        # ---------- Completion time ----------
+        if self.last_timeout_occurred:
+            completion_time_s = (self.timeout_threshold_ms / 1000.0) + recompute_time
+        else:
+            completion_time_s = edge_total_time_s + actual_idle_time_s + max_transmission_time
+
+        # ================================================================
+        # Chain reset ONLY on Action 0 (Edge)
+        # ================================================================
+        if action_mode == 0:   # EDGE -> RESET chain
+            self.optimistic_chain_start = -1
+            self.data_location = 'EDGE'
+        elif action_mode == 1: # OPTIMISTIC -> EXTEND chain
+            if self.optimistic_chain_start == -1:
+                self.optimistic_chain_start = layer
+            self.data_location = 'CLOUDLET'
+        else:  # action_mode == 2 (CONSERVATIVE) -> DO NOT RESET
+            self.data_location = 'EDGE'
+
+        if self.optimistic_chain_start == -1:
+            self.optimistic_chain_length = 0
+        else:
+            self.optimistic_chain_length = layer - self.optimistic_chain_start + 1
+
+        # Cap chain length to prevent explosion
+        if self.optimistic_chain_length > 7:
+            self.optimistic_chain_length = 7
+
+        self.cumulative_time_seconds += completion_time_s
+        self.cumulative_energy_joules += total_energy
+
+        return total_energy, completion_time_s
+
+    def calculate_reward(self, layer, total_energy, completion_time_s,
+                         previous_surplus=0.0, negative_surplus_count=0, isA2C=False):
+        # Energy penalty (scaled to be meaningful)
+        energy_penalty = total_energy * 50.0
         
-        # Main statistics storage
-        # Structure: level -> node_index -> {"edge": count, "cloud": count}
-        self.offloading_counts = defaultdict(lambda: defaultdict(lambda: {"edge": 0, "cloud": 0, "total": 0}))
+        # Strong timeout penalty to discourage risky offloading
+        timeout_penalty = 0.0
+        if self.last_timeout_occurred:
+            timeout_penalty = 30.0 * (1 + self.optimistic_chain_length)
         
-        # Per-episode tracking
-        self.episode_stats = []
+        # Strong penalty for choosing Optimistic (Action 1) if it causes problems
+        action_penalty = 0.0
+        if self.last_action_mode == 1 and self.last_timeout_occurred:
+            action_penalty = 50.0  # Extra penalty for risky action that failed
+
+        reward = - (energy_penalty + timeout_penalty + action_penalty)
         
-        # Action pattern frequencies
-        self.action_pattern_counts = Counter()
-        
-        # Decision trends over time
-        self.decision_trends = []
-    
-    def parse_action(self, action):
-        """
-        Parse an action array and return per-node decisions.
-        
-        Args:
-            action: np.array([[level, decision], ...]) or similar
-            
-        Returns:
-            List of tuples: [(level, node_index, decision), ...]
-        """
-        decisions = []
-        
-        if len(action.shape) == 2:  # Standard 2D array
-            for i, row in enumerate(action):
-                level = int(row[0])
-                decision = int(row[1])
-                # For multi-node levels, assume node index = position in array
-                node_idx = i
-                decisions.append((level, node_idx, decision))
-        
-        return decisions
-    
-    def track_action(self, action, episode_num=None, step_num=None):
-        """
-        Track a single action taken by the agent.
-        
-        Args:
-            action: Action array from agent
-            episode_num: Current episode number (optional)
-            step_num: Current step number (optional)
-        """
-        # Parse the action
-        decisions = self.parse_action(action)
-        
-        # Update per-node statistics
-        for level, node_idx, decision in decisions:
-            if decision == 0:  # Edge
-                self.offloading_counts[level][node_idx]["edge"] += 1
-            else:  # Cloudlet
-                self.offloading_counts[level][node_idx]["cloud"] += 1
-            
-            self.offloading_counts[level][node_idx]["total"] += 1
-        
-        # Track action pattern (useful for frequency analysis)
-        if decisions:
-            # Create a pattern string for this action
-            pattern = "_".join([f"{level}_{node}_{decision}" 
-                              for level, node, decision in decisions])
-            self.action_pattern_counts[pattern] += 1
-        
-        # Record trend data
-        if episode_num is not None and step_num is not None:
-            edge_count = sum(1 for _, _, d in decisions if d == 0)
-            cloud_count = sum(1 for _, _, d in decisions if d == 1)
-            self.decision_trends.append({
-                "episode": episode_num,
-                "step": step_num,
-                "edge_decisions": edge_count,
-                "cloud_decisions": cloud_count,
-                "total_nodes": len(decisions)
-            })
-    
-    def record_episode(self, episode_data):
-        """
-        Record complete episode statistics.
-        
-        Args:
-            episode_data: Dict containing episode summary
-        """
-        self.episode_stats.append(episode_data)
-    
-    def get_node_offloading_rate(self, level, node_idx):
-        """
-        Get offloading rate for a specific node.
-        
-        Returns: Percentage of times this node was offloaded to cloudlet
-        """
-        if level not in self.offloading_counts or node_idx not in self.offloading_counts[level]:
-            return 0.0
-        
-        stats = self.offloading_counts[level][node_idx]
-        if stats["total"] == 0:
-            return 0.0
-        
-        return (stats["cloud"] / stats["total"]) * 100
-    
-    def get_level_summary(self, level):
-        """
-        Get summary statistics for a specific level.
-        
-        Returns: Dict with level statistics
-        """
-        if level not in self.offloading_counts:
-            return {"edge": 0, "cloud": 0, "total": 0, "offloading_rate": 0.0}
-        
-        edge_total = 0
-        cloud_total = 0
-        
-        for node_stats in self.offloading_counts[level].values():
-            edge_total += node_stats["edge"]
-            cloud_total += node_stats["cloud"]
-        
-        total = edge_total + cloud_total
-        offloading_rate = (cloud_total / total * 100) if total > 0 else 0.0
-        
-        return {
-            "edge": edge_total,
-            "cloud": cloud_total,
-            "total": total,
-            "offloading_rate": offloading_rate,
-            "node_count": len(self.offloading_counts[level])
-        }
-    
-    def print_summary(self):
-        """Print comprehensive offloading statistics."""
-        print("\n" + "="*70)
-        print("OFFLOADING STATISTICS SUMMARY")
-        print("="*70)
-        
-        # Overall statistics
-        total_edge = 0
-        total_cloud = 0
-        
-        print("\nPer-Level Offloading Rates:")
-        print("-"*40)
-        for level in sorted(self.offloading_counts.keys()):
-            level_summary = self.get_level_summary(level)
-            total_edge += level_summary["edge"]
-            total_cloud += level_summary["cloud"]
-            
-            print(f"Level {level:2d}: "
-                  f"Edge={level_summary['edge']:6d} | "
-                  f"Cloud={level_summary['cloud']:6d} | "
-                  f"Rate={level_summary['offloading_rate']:6.2f}% | "
-                  f"Nodes={level_summary['node_count']}")
-        
-        # Overall statistics
-        total_decisions = total_edge + total_cloud
-        overall_rate = (total_cloud / total_decisions * 100) if total_decisions > 0 else 0.0
-        
-        print("\n" + "-"*70)
-        print(f"OVERALL: Edge={total_edge:,} | Cloud={total_cloud:,} | "
-              f"Total={total_decisions:,} | Offloading Rate={overall_rate:.2f}%")
-        print("="*70)
-    
-    def get_heatmap_data(self):
-        """
-        Prepare data for offloading heatmap visualization.
-        
-        Returns:
-            Array with offloading rates for each node
-        """
-        max_level = max(self.offloading_counts.keys()) if self.offloading_counts else 0
-        max_nodes = max(len(nodes) for nodes in self.offloading_counts.values()) if self.offloading_counts else 0
-        
-        heatmap = np.zeros((max_level + 1, max_nodes))
-        
-        for level in self.offloading_counts:
-            for node_idx, stats in self.offloading_counts[level].items():
-                if stats["total"] > 0:
-                    rate = stats["cloud"] / stats["total"]
-                    heatmap[level, node_idx] = rate
-        
-        return heatmap
-    
-    def plot_offloading_heatmap(self, save_path=None):
-        """Create a heatmap visualization of offloading decisions."""
-        heatmap_data = self.get_heatmap_data()
-        
-        if heatmap_data.size == 0:
-            print("No data to plot")
-            return
-        
-        plt.figure(figsize=(12, 8))
-        plt.imshow(heatmap_data, cmap='RdYlBu_r', aspect='auto', vmin=0, vmax=1)
-        plt.colorbar(label='Offloading Rate (0=Edge, 1=Cloudlet)')
-        plt.xlabel('Node Index')
-        plt.ylabel('DNN Level')
-        plt.title('Node Offloading Heatmap')
-        
-        # Add text annotations
-        for i in range(heatmap_data.shape[0]):
-            for j in range(heatmap_data.shape[1]):
-                if heatmap_data[i, j] > 0:
-                    plt.text(j, i, f'{heatmap_data[i, j]:.2f}', 
-                            ha='center', va='center', color='black', fontsize=8)
-        
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Heatmap saved to {save_path}")
-        
-        plt.show()
-    
-    def plot_offloading_trends(self, save_path=None):
-        """Plot offloading decision trends over episodes."""
-        if not self.decision_trends:
-            print("No trend data available")
-            return
-        
-        # Group by episode
-        episodes = sorted(set(d['episode'] for d in self.decision_trends))
-        edge_by_episode = []
-        cloud_by_episode = []
-        
-        for ep in episodes:
-            ep_data = [d for d in self.decision_trends if d['episode'] == ep]
-            edge_total = sum(d['edge_decisions'] for d in ep_data)
-            cloud_total = sum(d['cloud_decisions'] for d in ep_data)
-            edge_by_episode.append(edge_total)
-            cloud_by_episode.append(cloud_total)
-        
-        plt.figure(figsize=(12, 6))
-        x = range(len(episodes))
-        
-        plt.plot(x, edge_by_episode, 'b-', label='Edge Decisions', linewidth=2)
-        plt.plot(x, cloud_by_episode, 'r-', label='Cloud Decisions', linewidth=2)
-        plt.plot(x, np.array(edge_by_episode) + np.array(cloud_by_episode), 
-                'g--', label='Total Decisions', linewidth=1.5, alpha=0.7)
-        
-        plt.xlabel('Episode')
-        plt.ylabel('Number of Decisions')
-        plt.title('Offloading Decision Trends Over Episodes')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        
-        if save_path:
-            plt.savefig(save_path, dpi=150, bbox_inches='tight')
-            print(f"Trend plot saved to {save_path}")
-        
-        plt.show()
-    
-    def save_statistics(self, filename="offloading_stats.json"):
-        """Save statistics to JSON file."""
-        stats_dict = {
-            "per_node_stats": {},
-            "per_level_summary": {},
-            "action_patterns": dict(self.action_pattern_counts.most_common(20)),
-            "total_episodes": len(self.episode_stats)
-        }
-        
-        # Save per-node statistics
-        for level in self.offloading_counts:
-            stats_dict["per_node_stats"][str(level)] = {
-                str(node): stats 
-                for node, stats in self.offloading_counts[level].items()
-            }
-        
-        # Save per-level summary
-        for level in sorted(self.offloading_counts.keys()):
-            stats_dict["per_level_summary"][str(level)] = self.get_level_summary(level)
-        
-        with open(filename, 'w') as f:
-            json.dump(stats_dict, f, indent=2)
-        
-        print(f"Statistics saved to {filename}")
-    
-    def load_statistics(self, filename="offloading_stats.json"):
-        """Load statistics from JSON file."""
-        try:
-            with open(filename, 'r') as f:
-                stats_dict = json.load(f)
-            
-            # Load per-node statistics
-            for level_str, node_dict in stats_dict.get("per_node_stats", {}).items():
-                level = int(level_str)
-                for node_str, stats in node_dict.items():
-                    node_idx = int(node_str)
-                    self.offloading_counts[level][node_idx] = stats
-            
-            print(f"Statistics loaded from {filename}")
-            return True
-        except FileNotFoundError:
-            print(f"Statistics file {filename} not found")
-            return False
-        except Exception as e:
-            print(f"Error loading statistics: {e}")
-            return False
+        if isA2C:
+            reward *= 0.15
+
+        # Surplus / Deadline tracking
+        fractional_deadline_ms = (
+            self.profiling.get_edge_time_for_layer(layer)
+            / self.profiling.get_total_edge_time()
+        ) * getattr(self.profiling, 'deadline', 500.0)
+        completion_time_ms = completion_time_s * 1000.0
+        effective_deadline_ms = fractional_deadline_ms + previous_surplus
+        surplus_ms = effective_deadline_ms - completion_time_ms
+        if completion_time_ms > effective_deadline_ms:
+            negative_surplus_count += 1
+
+        return reward, surplus_ms, negative_surplus_count, fractional_deadline_ms

@@ -6,72 +6,93 @@ from profiling.profile import ProfilingData
 from simulator.simulator import CloudEdgeSimulator
 
 
-class TabularActorCriticAgent:
-    def __init__(self, profiling_data: ProfilingData, is_test=False,
-                 alpha_actor=0.02, alpha_critic=0.05, gamma=0.95):
+class BaselineTabularActorCriticAgent:
+    """
+    Tabular Actor–Critic with:
+    - Double-Q–equivalent logic
+    - Stable state abstraction
+    - ε-style exploration
+    - Temperature-based policy smoothing
+    """
+
+    def __init__(
+        self,
+        profiling_data: ProfilingData,
+        is_test=False,
+        alpha_actor=0.02,
+        alpha_critic=0.05,
+        gamma=0.95,
+    ):
         self.profiling = profiling_data
         self.is_test = is_test
         self.gamma = gamma
+
         self.alpha_actor = alpha_actor
         self.alpha_critic = alpha_critic
 
-        self.policy_table = {}
-        self.value_table = {}
+        self.policy_table = {}   # (state_key, action_key) → preference
+        self.value_table = {}    # state_key → V(s)
 
         self.simulator = CloudEdgeSimulator(profiling_data)
 
-        # Discretization bins
-        self.bandwidth_bins = np.linspace(0.5, 30, 40)
-        self.rtt_bins = np.linspace(0, 100, 20)
+        # SAME discretization scale as Double-Q
+        self.bandwidth_bins = np.linspace(1, 15, 60)
         self.cloudtime_bins = np.linspace(0, 100, 20)
-        self.surplus_bins = np.linspace(-25, 25, 20)
-        self.chain_bins = np.linspace(0, 7, 8)
+        self.surplus_bins = np.linspace(-25, 25, 25)
 
-        # Exploration
+        # Exploration control (ε-equivalent)
         self.temperature = 1.0
         self.temperature_min = 0.25
         self.temperature_decay = 0.999
         self.temperature_boost = 0.35
-        self.epsilon_min = 0.05
+
+        self.epsilon_min = 0.05   # hard ε-floor
 
         self.best_episode_reward = -1e9
         self.episodes_since_improvement = 0
         self.stagnant_limit = 10000
-
-        # Execution tracking
-        self.edge_execution_counts = {}
-        self.optimistic_execution_counts = {}
-        self.conservative_execution_counts = {}
+        
+        # Add node execution tracking
+        self.edge_execution_counts = {}  # (layer, node) → count of edge executions
+        self.cloud_execution_counts = {}  # (layer, node) → count of cloud executions
         self.total_episodes = 0
 
+    # ======================================================
+    # Discretization
+    # ======================================================
     def _discretize(self, value, bins):
         idx = np.digitize([value], bins, right=True)[0] - 1
         return float(bins[max(0, min(idx, len(bins) - 1))])
 
+    # ======================================================
+    # ✅ FIXED STATE (NO prev_action)
+    # ======================================================
     def _state_to_key(self, state):
-        bw, rtt, ctime, layer, _, surplus, neg_count, chain_len = state
+        bw, ctime, layer, _, surplus, neg_count = state
         return (
             self._discretize(float(bw), self.bandwidth_bins),
-            self._discretize(float(rtt), self.rtt_bins),
             self._discretize(float(ctime), self.cloudtime_bins),
             int(layer),
             self._discretize(float(surplus), self.surplus_bins),
             int(neg_count),
-            int(chain_len),
         )
 
     def _action_to_key(self, action):
         return tuple(int(x) for x in action[:, 1])
 
+    # ======================================================
+    # Action Space (IDENTICAL to Double-Q)
+    # ======================================================
     def _get_possible_actions(self, layer_idx):
         nodes = self.profiling.get_num_nodes(layer_idx)
+
         if layer_idx == len(self.profiling.layers) - 1:
             a = np.zeros((nodes, 2), dtype=int)
             a[:, 0] = layer_idx
             return [a]
 
         max_patterns = 64
-        patterns = list(range(3 ** nodes))
+        patterns = list(range(2 ** nodes))
         if len(patterns) > max_patterns:
             patterns = random.sample(patterns, max_patterns)
 
@@ -79,18 +100,20 @@ class TabularActorCriticAgent:
         for p in patterns:
             a = np.zeros((nodes, 2), dtype=int)
             a[:, 0] = layer_idx
-            temp = p
             for i in range(nodes):
-                a[i, 1] = temp % 3
-                temp //= 3
+                a[i, 1] = (p >> i) & 1
             actions.append(a)
         return actions
 
+    # ======================================================
+    # ✅ ACTION SELECTION (ε + softmax)
+    # ======================================================
     def choose_action(self, state):
-        layer = int(state[3])
+        layer = int(state[2])
         actions = self._get_possible_actions(layer)
         s_key = self._state_to_key(state)
 
+        # ε-style forced exploration
         if not self.is_test and random.random() < self.epsilon_min:
             return random.choice(actions)
 
@@ -101,19 +124,23 @@ class TabularActorCriticAgent:
 
         prefs = prefs / max(self.temperature, 1e-6)
         prefs -= np.max(prefs)
+
         probs = np.exp(prefs)
         probs /= np.sum(probs)
 
         if self.is_test:
             return actions[int(np.argmax(probs))]
+
         return actions[np.random.choice(len(actions), p=probs)]
 
+    # ======================================================
+    # Environment step (IDENTICAL)
+    # ======================================================
     def train(self, current_state):
         action = self.choose_action(current_state)
 
-        next_layer = min(int(current_state[3]) + 1, len(self.profiling.layers) - 1)
         next_cloud = self.simulator.get_next_state_cloud_waiting_time(
-            next_layer=next_layer,
+            next_layer=min(int(current_state[2]) + 1, len(self.profiling.layers) - 1),
             current_action=action,
             isAllCloud=False,
         )
@@ -126,23 +153,21 @@ class TabularActorCriticAgent:
 
         reward, surplus, neg_count, fractional_deadline = \
             self.simulator.calculate_reward(
-                int(current_state[3]),
+                int(current_state[2]),
                 energy,
                 completion_time_s,
+                current_state[4],
                 current_state[5],
-                current_state[6],
                 isA2C=True,
             )
 
-        next_state, terminal = self.simulator.get_next_state(
+        next_state, terminal, _ = self.simulator.get_next_state(
             current_state,
             action,
+            surplus,
+            neg_count,
             new_cloud_pending=next_cloud,
-            surplus=surplus,
-            neg_count=neg_count,
         )
-
-        self.track_action_execution(action, int(current_state[3]))
 
         return (
             action,
@@ -157,6 +182,9 @@ class TabularActorCriticAgent:
             neg_count,
         )
 
+    # ======================================================
+    # Monte-Carlo Actor–Critic Update
+    # ======================================================
     def update_trajectory(self, trajectory):
         G = 0.0
         for step in reversed(trajectory):
@@ -171,43 +199,61 @@ class TabularActorCriticAgent:
 
             self.value_table[s] = V + self.alpha_critic * advantage
             self.policy_table[(s, a)] = np.clip(
-                self.policy_table.get((s, a), 0.0) + self.alpha_actor * advantage,
+                self.policy_table.get((s, a), 0.0)
+                + self.alpha_actor * advantage,
                 -50.0, 50.0,
             )
 
+    # ======================================================
+    # Node execution tracking
+    # ======================================================
     def track_action_execution(self, action, layer):
+        """Track where each node was executed (edge=0, cloud=1)"""
         for node_idx, (_, location) in enumerate(action):
             key = (layer, node_idx)
-            if location == 0:
+            if location == 0:  # Edge execution
                 self.edge_execution_counts[key] = self.edge_execution_counts.get(key, 0) + 1
-            elif location == 1:
-                self.optimistic_execution_counts[key] = self.optimistic_execution_counts.get(key, 0) + 1
-            else:
-                self.conservative_execution_counts[key] = self.conservative_execution_counts.get(key, 0) + 1
-
+            else:  # Cloud execution
+                self.cloud_execution_counts[key] = self.cloud_execution_counts.get(key, 0) + 1
+    
     def get_execution_stats(self):
+        """Return execution statistics"""
         return {
             'edge_counts': self.edge_execution_counts,
-            'optimistic_counts': self.optimistic_execution_counts,
-            'conservative_counts': self.conservative_execution_counts,
-            'total_episodes': self.total_episodes,
+            'cloud_counts': self.cloud_execution_counts,
+            'total_episodes': self.total_episodes
         }
 
+    # ======================================================
+    # Episode-level exploration control
+    # ======================================================
     def notify_episode_end(self, episode_reward):
         self.total_episodes += 1
         if episode_reward > self.best_episode_reward + 1e-6:
             self.best_episode_reward = episode_reward
             self.episodes_since_improvement = 0
-            self.temperature = max(self.temperature_min, self.temperature * 0.995)
+            self.temperature = max(
+                self.temperature_min,
+                self.temperature * 0.995
+            )
         else:
             self.episodes_since_improvement += 1
             if self.episodes_since_improvement >= self.stagnant_limit:
-                self.temperature = min(2.0, self.temperature * self.temperature_boost)
+                self.temperature = min(
+                    2.0,
+                    self.temperature * self.temperature_boost
+                )
                 self.episodes_since_improvement = 0
                 print(f"🔥 Temperature boosted to {self.temperature:.2f}")
             else:
-                self.temperature = max(self.temperature_min, self.temperature * self.temperature_decay)
+                self.temperature = max(
+                    self.temperature_min,
+                    self.temperature * self.temperature_decay
+                )
 
+    # ======================================================
+    # Persistence
+    # ======================================================
     def save(self, file="a2c_tables.pkl"):
         with open(file, "wb") as f:
             pickle.dump((self.policy_table, self.value_table), f)
