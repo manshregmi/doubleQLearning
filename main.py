@@ -1,140 +1,146 @@
 import random
-
-from matplotlib import pyplot as plt
-from profiling.initialize_profiling import get_profiling_data
-from reference_schedulers.random_scheduler import run_random_scheduler
-from simulator.a2c_simulator import run_a2c_simulation
-# from simulator.doubleQ_simulator import run_simulation       # if you want DQ
-# from a2c.coarse_grained_dq import run_oneshot_doubleQ_simulation
-# from a2c.coarse_grained_a2c import run_oneshot_a2c_simulation
 import numpy as np
+import matplotlib.pyplot as plt
+
+from profiling.initialize_profiling import get_profiling_data
+from simulator.a2c_simulator import run_a2c_simulation
+
 
 # ---------- CONFIGURATION ----------
-# Set this to your actual trace CSV path, or None to use stochastic bandwidth/RTT
-TRACE_CSV_PATH = "C:\\Users\\SIU856613348\\OneDrive - Southern Illinois University\\doubleQLearning\\simulator\\data\\bw_data_trace.csv"   # <--- UPDATE THIS
-TIMEOUT_THRESHOLD_MS = 25                  # timeout threshold in ms
+TRACE_CSV_PATH = ("C:\\Users\\SIU856613348\\OneDrive - Southern Illinois University\\"
+                  "doubleQLearning\\simulator\\data\\bw_data_trace.csv")
+
+DEADLINE_MS = 500
+N_DEVICES = 8
+
+# Thresholds to sweep over
+TIMEOUT_THRESHOLDS_MS = [25, 50, 75, 100, 150, 200, 300]
+
+# Training settings
+TRAIN_EPISODES = 1000000
+EVAL_EPISODES = 10000
+MAX_STEPS = 10
+PACKET_LOSS = 0.10
+MODEL_PATH = "a2c_tables.pkl"
+SEED = 42
 
 # ---------- PLOTTING STYLE ----------
 plt.rcParams['font.family'] = 'serif'
 plt.rcParams['font.serif'] = ['Times New Roman']
-plt.rcParams['axes.titlesize'] = 28
-plt.rcParams['axes.labelsize'] = 28
-plt.rcParams['xtick.labelsize'] = 24
-plt.rcParams['ytick.labelsize'] = 24
-plt.rcParams['legend.fontsize'] = 24
-plt.rcParams['figure.titlesize'] = 28
+plt.rcParams['axes.titlesize'] = 24
+plt.rcParams['axes.labelsize'] = 22
+plt.rcParams['xtick.labelsize'] = 18
+plt.rcParams['ytick.labelsize'] = 18
+plt.rcParams['legend.fontsize'] = 18
+plt.rcParams['figure.titlesize'] = 24
 plt.rcParams['lines.linewidth'] = 3
 plt.rcParams['lines.markersize'] = 10
 
+
 if __name__ == "__main__":
-    is_test = False
-    episodes = 1000000
-    max_steps = 10
-    deadlines = list(range(500, 501, 50)) 
+    # Set up profiling (deadline fixed at 500 ms)
+    profiling_data = get_profiling_data(DEADLINE_MS, N_DEVICES)
 
-    # Results containers
-    a2c_energy, a2c_time, a2c_deadline_misses = [], [], []
-    random_energy, random_time, random_deadline_misses = [], [], []
-    cloud_energy, cloud_time, cloud_deadline_misses = [], [], []
+    # ---------- 1) TRAIN ONCE with threshold in state, randomized across sweep ----------
+    print("\n" + "=" * 70)
+    print("TRAINING: agent sees all thresholds during training")
+    print("=" * 70)
+    run_a2c_simulation(
+        profiling_data,
+        episodes=TRAIN_EPISODES,
+        max_steps=MAX_STEPS,
+        is_test=False,
+        visualize_stats=False,
+        plot_rewards=False,
+        trace_csv_path=TRACE_CSV_PATH,
+        timeout_threshold_ms=TIMEOUT_THRESHOLDS_MS[0],
+        packet_loss_prob=PACKET_LOSS,
+        model_path=MODEL_PATH,
+        train_thresholds=TIMEOUT_THRESHOLDS_MS,  # sample threshold each episode
+        seed=SEED,
+    )
 
-    for d in deadlines:
-        print(f"\n{'='*60}")
-        print(f"Running simulations for deadline: {d} ms")
-        print(f"{'='*60}")
+    # ---------- 2) EVALUATE AT EACH THRESHOLD ----------
+    print("\n" + "=" * 70)
+    print("EVALUATION: sweeping timeout thresholds")
+    print("=" * 70)
 
-        profiling_data = get_profiling_data(d, 8)
+    energies, times, miss_rates, timeouts = [], [], [], []
 
-        # ----- EdgeWise A2C (level-wise, ternary actions, timeout) -----
-        print("Running EdgeWise A2C...")
-        a2c_e, a2c_t, a2c_dm = run_a2c_simulation(
+    for th in TIMEOUT_THRESHOLDS_MS:
+        result = run_a2c_simulation(
             profiling_data,
-            episodes=episodes,
-            max_steps=max_steps,
-            is_test=is_test,
+            episodes=EVAL_EPISODES,
+            max_steps=MAX_STEPS,
+            is_test=False,
             visualize_stats=False,
             plot_rewards=False,
-            smoothing_window=50,
             trace_csv_path=TRACE_CSV_PATH,
-            timeout_threshold_ms=TIMEOUT_THRESHOLD_MS
+            timeout_threshold_ms=th,
+            packet_loss_prob=PACKET_LOSS,
+            model_path=MODEL_PATH,
+            train_thresholds=None,
+            seed=SEED,  # same seed for paired evaluation
         )
-        a2c_energy.append(a2c_e)
-        a2c_time.append(a2c_t)
-        a2c_deadline_misses.append(a2c_dm / episodes)
-        print(f"  A2C: Energy={a2c_e:.3f}J, Time={a2c_t:.1f}ms, Miss={a2c_dm/episodes*100:.2f}%")
+        energies.append(result["avg_energy"])
+        times.append(result["avg_time_ms"])
+        miss_rates.append(result["deadline_miss_rate"] * 100.0)
+        timeouts.append(result["avg_timeouts_per_ep"])
+        print(f"  τ_to = {th:>4} ms -> "
+              f"E = {result['avg_energy']:.3f} J, "
+              f"T = {result['avg_time_ms']:.1f} ms, "
+              f"DL-miss = {result['deadline_miss_rate']*100:.1f}%, "
+              f"timeouts/ep = {result['avg_timeouts_per_ep']:.2f}")
 
-        # # ----- Baselines (binary actions) -----
-        # # All Cloud
-        # ce, ct, cloud_missed = run_random_scheduler(
-        #     profiling_data, 1000, max_steps,
-        #     is_random=False, is_all_cloud=True
-        # )
-        # cloud_energy.append(ce)
-        # cloud_time.append(ct)
-        # cloud_deadline_misses.append(cloud_missed / 1000)
+    # ---------- 3) PLOTS ----------
+    ths = np.array(TIMEOUT_THRESHOLDS_MS)
 
-        # # Random scheduler
-        # re, rt, random_missed = run_random_scheduler(
-        #     profiling_data, 1000, max_steps,
-        #     is_random=True, is_all_cloud=False
-        # )
-        # random_energy.append(re)
-        # random_time.append(rt)
-        # random_deadline_misses.append(random_missed / 1000)
+    # Energy vs threshold
+    plt.figure(figsize=(10, 7))
+    plt.plot(ths, energies, marker='o', color='#1f77b4')
+    plt.xlabel("Timeout Threshold (ms)", fontfamily='Times New Roman')
+    plt.ylabel("Average Energy (J)", fontfamily='Times New Roman')
+    plt.title(f"Energy vs Timeout Threshold (Deadline={DEADLINE_MS} ms)",
+              fontfamily='Times New Roman')
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.savefig("energy_vs_threshold.png", dpi=300)
+    plt.show()
 
-        # (Optional) All Edge – can be added similarly if desired
-        # ee, et, edge_missed = run_random_scheduler(... is_all_cloud=False, is_random=False)
-        # edge_energy.append(ee) ...
+    # Completion time vs threshold
+    plt.figure(figsize=(10, 7))
+    plt.plot(ths, times, marker='s', color='#2ca02c')
+    plt.axhline(y=DEADLINE_MS, color='red', linestyle='--',
+                linewidth=2, label=f"Deadline = {DEADLINE_MS} ms")
+    plt.xlabel("Timeout Threshold (ms)", fontfamily='Times New Roman')
+    plt.ylabel("Average Completion Time (ms)", fontfamily='Times New Roman')
+    plt.title(f"Completion Time vs Timeout Threshold (Deadline={DEADLINE_MS} ms)",
+              fontfamily='Times New Roman')
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.savefig("time_vs_threshold.png", dpi=300)
+    plt.show()
 
-    # # ---------- PLOT: Deadline Miss Rate ----------
-    # plt.figure(figsize=(14, 8))
-    # plt.plot(deadlines, a2c_deadline_misses, label="EdgeWise A2C (level-wise)", marker='o', linewidth=3)
-    # plt.plot(deadlines, cloud_deadline_misses, label="All Cloud", marker='x', linewidth=3)
-    # plt.plot(deadlines, random_deadline_misses, label="Random", marker='^', linewidth=3)
+    # Deadline miss rate vs threshold
+    plt.figure(figsize=(10, 7))
+    plt.plot(ths, miss_rates, marker='^', color='#d62728')
+    plt.xlabel("Timeout Threshold (ms)", fontfamily='Times New Roman')
+    plt.ylabel("Deadline Miss Rate (%)", fontfamily='Times New Roman')
+    plt.title(f"Deadline Miss Rate vs Timeout Threshold (Deadline={DEADLINE_MS} ms)",
+              fontfamily='Times New Roman')
+    plt.grid(True, linestyle="--", alpha=0.5)
+    plt.tight_layout()
+    plt.savefig("miss_rate_vs_threshold.png", dpi=300)
+    plt.show()
 
-    # plt.xlabel("Deadline (ms)", fontsize=28, fontfamily='Times New Roman')
-    # plt.ylabel("Deadline Miss Rate (%)", fontsize=28, fontfamily='Times New Roman')
-    # plt.legend(
-    #     loc="lower center",
-    #     bbox_to_anchor=(0.5, 1.02),
-    #     ncol=3,
-    #     frameon=False,
-    #     prop={'family': 'Times New Roman', 'size': 24}
-    # )
-    # plt.grid(True, linestyle="--", alpha=0.6)
-    # plt.xticks(fontsize=24, fontfamily='Times New Roman')
-    # plt.yticks(fontsize=24, fontfamily='Times New Roman')
-    # plt.tight_layout()
-    # plt.savefig("deadline_misses_edgewise_comparison.png", dpi=600)
-    # plt.show()
-
-    # # Optional: Energy vs Deadline plot
-    # plt.figure(figsize=(14, 8))
-    # plt.plot(deadlines, a2c_energy, label="EdgeWise A2C", marker='o', linewidth=3)
-    # plt.plot(deadlines, cloud_energy, label="All Cloud", marker='x', linewidth=3)
-    # plt.plot(deadlines, random_energy, label="Random", marker='^', linewidth=3)
-    # plt.xlabel("Deadline (ms)", fontsize=28, fontfamily='Times New Roman')
-    # plt.ylabel("Average Energy (J)", fontsize=28, fontfamily='Times New Roman')
-    # plt.legend(
-    #     loc="lower center",
-    #     bbox_to_anchor=(0.5, 1.02),
-    #     ncol=3,
-    #     frameon=False,
-    #     prop={'family': 'Times New Roman', 'size': 24}
-    # )
-    # plt.grid(True, linestyle="--", alpha=0.6)
-    # plt.xticks(fontsize=24, fontfamily='Times New Roman')
-    # plt.yticks(fontsize=24, fontfamily='Times New Roman')
-    # plt.tight_layout()
-    # plt.savefig("energy_edgewise_comparison.png", dpi=600)
-    # plt.show()
-
-    # # Print summary
-    # print("\n" + "="*60)
-    # print("SUMMARY OF RESULTS (EdgeWise A2C)")
-    # print("="*60)
-    # for idx, d in enumerate(deadlines):
-    #     print(f"\nDeadline {d}ms:")
-    #     print(f"  A2C Energy: {a2c_energy[idx]:.3f} J, Miss: {a2c_deadline_misses[idx]*100:.1f}%")
-    #     print(f"  Cloud Energy: {cloud_energy[idx]:.3f} J, Miss: {cloud_deadline_misses[idx]*100:.1f}%")
-    #     print(f"  Random Energy: {random_energy[idx]:.3f} J, Miss: {random_deadline_misses[idx]*100:.1f}%")
-    # print("="*60)
+    # ---------- Summary ----------
+    print("\n" + "=" * 70)
+    print("SUMMARY")
+    print("=" * 70)
+    print(f"{'Threshold (ms)':<16} {'Energy (J)':<12} {'Time (ms)':<12} "
+          f"{'DL-miss %':<12} {'TO/ep':<10}")
+    for i, th in enumerate(TIMEOUT_THRESHOLDS_MS):
+        print(f"{th:<16} {energies[i]:<12.3f} {times[i]:<12.1f} "
+              f"{miss_rates[i]:<12.2f} {timeouts[i]:<10.2f}")
+    print("=" * 70)
