@@ -2,8 +2,22 @@ import numpy as np
 import random
 import pickle
 import os
+import itertools
 from profiling.profile import ProfilingData
 from simulator.simulator import CloudEdgeSimulator
+
+
+# Predefined action spaces (per-node modes)
+#   0 = local (user/edge device)
+#   1 = optimistic cloudlet  (result download deferred)
+#   2 = conservative cloudlet (result download immediate)
+ACTION_SPACES = {
+    "ternary":      (0, 1, 2),
+    "optimistic":   (0, 1),
+    "conservative": (0, 2),
+}
+
+DEFAULT_THRESHOLD_LEVELS = (25, 50, 75, 100, 150, 200, 300)
 
 
 class TabularActorCriticAgent:
@@ -11,15 +25,45 @@ class TabularActorCriticAgent:
                  alpha_actor=0.02, alpha_critic=0.05, gamma=0.95,
                  trace_csv_path=None,
                  timeout_threshold_ms=150.0,
-                 packet_loss_prob=0.10):
+                 packet_loss_prob=0.10,
+                 action_modes=(0, 1, 2),
+                 threshold_aware=True,
+                 threshold_levels=DEFAULT_THRESHOLD_LEVELS,
+                 threshold_sharing=True,
+                 verbose=False):
         self.profiling = profiling_data
         self.is_test = is_test
         self.gamma = gamma
         self.alpha_actor = alpha_actor
         self.alpha_critic = alpha_critic
 
+        # If False, the timeout threshold is NOT part of the state key.
+        self.threshold_aware = bool(threshold_aware)
+        # One state bin per threshold level (nearest level is used).
+        self.threshold_levels = np.asarray(sorted(threshold_levels), dtype=float)
+
+        # Allowed per-node modes for this agent
+        self.action_modes = tuple(int(m) for m in action_modes)
+        if 0 not in self.action_modes:
+            raise ValueError("action_modes must include 0 (local execution).")
+        self._action_cache = {}
+
+        # Threshold-specific tables (key includes the threshold bin when
+        # threshold_aware=True).
         self.policy_table = {}
         self.value_table = {}
+
+        # Shared tables (key WITHOUT the threshold bin). With sharing on, the
+        # preference/value is shared + threshold-specific, so experience at one
+        # threshold also trains the others; the specific part only has to learn
+        # where thresholds genuinely differ.
+        self.threshold_sharing = bool(threshold_sharing) and self.threshold_aware
+        self.shared_policy_table = {}
+        self.shared_value_table = {}
+
+        # Evaluation diagnostics
+        self.eval_decisions = 0
+        self.eval_unseen_states = 0
 
         self.simulator = CloudEdgeSimulator(
             profiling_data,
@@ -27,6 +71,7 @@ class TabularActorCriticAgent:
             timeout_threshold_ms=timeout_threshold_ms,
             packet_loss_prob=packet_loss_prob,
         )
+        self.simulator.verbose = verbose
 
         # Discretization bins
         self.bandwidth_bins = np.linspace(0.5, 30, 40)
@@ -34,7 +79,6 @@ class TabularActorCriticAgent:
         self.cloudtime_bins = np.linspace(0, 100, 20)
         self.surplus_bins = np.linspace(-100, 100, 20)
         self.chain_bins = np.linspace(0, 7, 8)
-        self.timeout_bins = np.linspace(0, 400, 9)  # for timeout threshold
 
         # Exploration (temperature-based softmax)
         self.temperature = 1.0
@@ -60,10 +104,9 @@ class TabularActorCriticAgent:
         return float(bins[max(0, min(idx, len(bins) - 1))])
 
     def _timeout_bin(self):
-        return int(np.digitize(
-            [self.simulator.timeout_threshold_ms],
-            self.timeout_bins, right=True
-        )[0])
+        """Index of the nearest threshold level -> one bin per threshold."""
+        th = float(self.simulator.timeout_threshold_ms)
+        return int(np.argmin(np.abs(self.threshold_levels - th)))
 
     def _state_to_key(self, state):
         # state = (bw, rtt, ctime, layer, prev_action, surplus, neg_count, chain_len, timeout_bin)
@@ -71,7 +114,7 @@ class TabularActorCriticAgent:
         prev_key = tuple(int(x) for x in prev_action) if prev_action is not None else (-1,)
         # Hash prev_key to small int to avoid huge table
         prev_hash = hash(prev_key) % 1000
-        return (
+        key = (
             self._discretize(float(bw), self.bandwidth_bins),
             self._discretize(float(rtt), self.rtt_bins),
             self._discretize(float(ctime), self.cloudtime_bins),
@@ -80,24 +123,51 @@ class TabularActorCriticAgent:
             self._discretize(float(surplus), self.surplus_bins),
             int(neg_count),
             int(chain_len),
-            int(t_bin),
         )
+        if self.threshold_aware:
+            key = key + (int(t_bin),)
+        return key
 
     def _action_to_key(self, action):
         return tuple(int(x) for x in action[:, 1])
 
+    # ---- shared + threshold-specific decomposition ----
+    @staticmethod
+    def _shared_key(s_key):
+        return s_key[:-1]  # drop the threshold bin
+
+    def _pref(self, s_key, a_key):
+        p = self.policy_table.get((s_key, a_key), 0.0)
+        if self.threshold_sharing:
+            p += self.shared_policy_table.get((self._shared_key(s_key), a_key), 0.0)
+        return p
+
+    def _value(self, s_key):
+        v = self.value_table.get(s_key, 0.0)
+        if self.threshold_sharing:
+            v += self.shared_value_table.get(self._shared_key(s_key), 0.0)
+        return v
+
+    def _is_trained(self, s_key, a_key):
+        if (s_key, a_key) in self.policy_table:
+            return True
+        return (self.threshold_sharing and
+                (self._shared_key(s_key), a_key) in self.shared_policy_table)
+
     def _get_possible_actions(self, layer_idx):
+        """All per-node assignments using only this agent's allowed modes."""
+        if layer_idx in self._action_cache:
+            return self._action_cache[layer_idx]
+
         nodes = self.profiling.get_num_nodes(layer_idx)
-        # Enumerate all ternary patterns
         actions = []
-        for pattern in range(3 ** nodes):
+        for pattern in itertools.product(self.action_modes, repeat=nodes):
             a = np.zeros((nodes, 2), dtype=int)
             a[:, 0] = layer_idx
-            temp = pattern
-            for i in range(nodes):
-                a[i, 1] = temp % 3
-                temp //= 3
+            a[:, 1] = pattern
             actions.append(a)
+
+        self._action_cache[layer_idx] = actions
         return actions
 
     def choose_action(self, state):
@@ -108,10 +178,15 @@ class TabularActorCriticAgent:
         if not self.is_test and random.random() < self.epsilon_min:
             return random.choice(actions)
 
-        prefs = np.array([
-            self.policy_table.get((s_key, self._action_to_key(a)), 0.0)
-            for a in actions
-        ])
+        action_keys = [self._action_to_key(a) for a in actions]
+
+        if self.is_test:
+            self.eval_decisions += 1
+            if not any(self._is_trained(s_key, ak) for ak in action_keys):
+                # Never trained on this state -> argmax of all-zero prefs = all-local
+                self.eval_unseen_states += 1
+
+        prefs = np.array([self._pref(s_key, ak) for ak in action_keys])
         prefs = prefs / max(self.temperature, 1e-6)
         prefs -= np.max(prefs)
         probs = np.exp(prefs)
@@ -131,6 +206,7 @@ class TabularActorCriticAgent:
             isAllCloud=False,
         )
 
+        # Must run BEFORE get_next_state (it sets last_timeout_occurred).
         energy, completion_time_s = self.simulator.compute_energy_and_time(
             current_state=current_state,
             current_action=action,
@@ -169,14 +245,30 @@ class TabularActorCriticAgent:
             s = step["state_key"]
             a = step["action_key"]
 
-            V = self.value_table.get(s, 0.0)
-            advantage = G - V
+            advantage = G - self._value(s)
 
-            self.value_table[s] = V + self.alpha_critic * advantage
-            self.policy_table[(s, a)] = float(np.clip(
-                self.policy_table.get((s, a), 0.0) + self.alpha_actor * advantage,
-                -50.0, 50.0,
-            ))
+            if self.threshold_sharing:
+                # Split each step between the shared and specific parts so the
+                # combined step size equals the non-shared agent's.
+                w = 0.5
+                ss = self._shared_key(s)
+                self.shared_value_table[ss] = (self.shared_value_table.get(ss, 0.0)
+                                               + w * self.alpha_critic * advantage)
+                self.value_table[s] = (self.value_table.get(s, 0.0)
+                                       + w * self.alpha_critic * advantage)
+                self.shared_policy_table[(ss, a)] = float(np.clip(
+                    self.shared_policy_table.get((ss, a), 0.0)
+                    + w * self.alpha_actor * advantage, -50.0, 50.0))
+                self.policy_table[(s, a)] = float(np.clip(
+                    self.policy_table.get((s, a), 0.0)
+                    + w * self.alpha_actor * advantage, -50.0, 50.0))
+            else:
+                self.value_table[s] = (self.value_table.get(s, 0.0)
+                                       + self.alpha_critic * advantage)
+                self.policy_table[(s, a)] = float(np.clip(
+                    self.policy_table.get((s, a), 0.0) + self.alpha_actor * advantage,
+                    -50.0, 50.0,
+                ))
 
     def track_action_execution(self, action, layer):
         for node_idx, (_, location) in enumerate(action):
@@ -214,9 +306,21 @@ class TabularActorCriticAgent:
 
     def save(self, file="a2c_tables.pkl"):
         with open(file, "wb") as f:
-            pickle.dump((self.policy_table, self.value_table), f)
+            pickle.dump({
+                "policy": self.policy_table,
+                "value": self.value_table,
+                "shared_policy": self.shared_policy_table,
+                "shared_value": self.shared_value_table,
+            }, f)
 
     def load(self, file="a2c_tables.pkl"):
         if os.path.exists(file):
             with open(file, "rb") as f:
-                self.policy_table, self.value_table = pickle.load(f)
+                data = pickle.load(f)
+            if isinstance(data, dict):
+                self.policy_table = data.get("policy", {})
+                self.value_table = data.get("value", {})
+                self.shared_policy_table = data.get("shared_policy", {})
+                self.shared_value_table = data.get("shared_value", {})
+            else:  # legacy (policy, value) tuple
+                self.policy_table, self.value_table = data

@@ -22,6 +22,12 @@ def run_a2c_simulation(
     model_path="a2c_tables.pkl",
     train_thresholds=None,  # list of thresholds to sample during training
     seed=None,
+    action_modes=(0, 1, 2),  # (0,1,2) ternary, (0,1) optimistic, (0,2) conservative
+    threshold_aware=True,    # include timeout threshold in the agent's state
+    threshold_levels=(25, 50, 75, 100, 150, 200, 300),  # one state bin per level
+    threshold_sharing=True,  # shared + per-threshold tables (threshold-aware only)
+    label="EdgeWise A2C",
+    verbose=False,           # per-layer simulator print
 ):
     if seed is not None:
         random.seed(seed)
@@ -32,6 +38,11 @@ def run_a2c_simulation(
         trace_csv_path=trace_csv_path,
         timeout_threshold_ms=timeout_threshold_ms,
         packet_loss_prob=packet_loss_prob,
+        action_modes=action_modes,
+        threshold_aware=threshold_aware,
+        threshold_levels=threshold_levels,
+        threshold_sharing=threshold_sharing,
+        verbose=verbose,
     )
     agent.load(model_path)
 
@@ -51,7 +62,8 @@ def run_a2c_simulation(
         conservative_execution_stats = defaultdict(int)
 
     start_time = time.time()
-    print(f"Running EdgeWise A2C (is_test={is_test})")
+    print(f"Running {label} (is_test={is_test}, modes={tuple(action_modes)}, "
+          f"threshold_in_state={threshold_aware})")
     print(f"  Episodes: {episodes}")
     print(f"  timeout_threshold_ms: {timeout_threshold_ms}")
 
@@ -147,7 +159,6 @@ def run_a2c_simulation(
                 for i in violating:
                     trajectory[i]["reward"] += per
             else:
-                # No individual violators recorded — apply uniformly
                 for s in trajectory:
                     s["reward"] += penalty / len(trajectory)
         else:
@@ -172,42 +183,52 @@ def run_a2c_simulation(
 
         if (ep + 1) % max(1, episodes // 10) == 0 or ep == 0:
             action_str = f"E:{episode_action_counts[0]} O:{episode_action_counts[1]} C:{episode_action_counts[2]}"
-            print(f"Ep {ep+1}/{episodes}: E={total_energy:.2f}J, "
+            print(f"[{label}] Ep {ep+1}/{episodes}: E={total_energy:.2f}J, "
                   f"T={total_time:.1f}ms, R={modified_reward:.1f}, "
                   f"Timeouts={episode_timeouts}, [{action_str}]")
 
     elapsed = time.time() - start_time
     print(f"\n{'='*60}")
-    print(f"COMPLETE: {episodes} episodes in {elapsed:.1f}s")
+    print(f"{label} COMPLETE: {episodes} episodes in {elapsed:.1f}s")
     print(f"  Avg Energy: {np.mean(edge_energy):.3f} J")
     print(f"  Avg Time:   {np.mean(completion_time):.1f} ms")
     print(f"  DL-Met:     {deadline_met_count}/{episodes} "
           f"({100.0*deadline_met_count/episodes:.1f}%)")
     print(f"  Avg Timeouts/ep: {np.mean(per_episode_timeouts):.2f}")
     print(f"  Actions: E={action_counts[0]}, O={action_counts[1]}, C={action_counts[2]}")
+    unseen_rate = (agent.eval_unseen_states / agent.eval_decisions
+                   if agent.eval_decisions else 0.0)
+    if is_test:
+        print(f"  Unseen states at eval: {agent.eval_unseen_states}/{agent.eval_decisions} "
+              f"({100.0 * unseen_rate:.1f}%)")
     print(f"{'='*60}")
 
     if plot_rewards and episodes > 1:
-        plot_smoothed_reward(episode_modified_rewards, smoothing_window)
+        plot_smoothed_reward(episode_modified_rewards, smoothing_window, label)
 
     if visualize_stats:
         print_execution_stats(edge_execution_stats, optimistic_execution_stats,
-                              conservative_execution_stats, profiling_data, episodes)
+                              conservative_execution_stats, profiling_data, episodes, label)
 
-    agent.save(model_path)
+    # Only persist tables after training; evaluation must not overwrite them.
+    if not is_test:
+        agent.save(model_path)
 
     return {
         "avg_energy": float(np.mean(edge_energy)),
         "avg_time_ms": float(np.mean(completion_time)),
         "deadline_miss_rate": deadline_missed_count / episodes,
         "avg_timeouts_per_ep": float(np.mean(per_episode_timeouts)),
+        "action_counts": dict(action_counts),
+        "unseen_state_rate": unseen_rate,
+        "n_episodes": episodes,
         "energies": edge_energy,
         "times": completion_time,
         "rewards": episode_modified_rewards,
     }
 
 
-def plot_smoothed_reward(rewards, smoothing_window=50):
+def plot_smoothed_reward(rewards, smoothing_window=50, label="EdgeWise"):
     episodes = np.arange(1, len(rewards) + 1)
     smoothed = pd.Series(rewards).rolling(window=smoothing_window,
                                           center=True, min_periods=1).mean()
@@ -215,23 +236,24 @@ def plot_smoothed_reward(rewards, smoothing_window=50):
     plt.plot(episodes, smoothed, color='#1f77b4', linewidth=3)
     plt.xlabel('Episode', fontsize=28, fontfamily='Times New Roman')
     plt.ylabel('Smoothed Reward', fontsize=28, fontfamily='Times New Roman')
-    plt.title('A2C Convergence (EdgeWise)', fontsize=28,
+    plt.title(f'A2C Convergence ({label})', fontsize=28,
               fontfamily='Times New Roman', fontweight='bold')
     plt.grid(True, alpha=0.2)
     plt.tight_layout()
     plt.show()
 
 
-def print_execution_stats(edge_stats, opt_stats, cons_stats, profiling_data, total_episodes):
+def print_execution_stats(edge_stats, opt_stats, cons_stats, profiling_data,
+                          total_episodes, label="EdgeWise"):
     print("\n" + "=" * 90)
-    print("NODE EXECUTION STATISTICS (EdgeWise)")
+    print(f"NODE EXECUTION STATISTICS ({label})")
     print("=" * 90)
     print(f"{'Node':<10} {'Edge':<10} {'Opt':<10} {'Cons':<10} "
           f"{'Total':<10} {'E%':<8} {'O%':<8} {'C%':<8} {'Dominant':<12}")
     print("-" * 90)
 
-    layer_names = ['v1', 'v2', 'v3', ['v4','v7','v10'],
-                   ['v5','v8','v11'], ['v6','v9','v12'], 'v13']
+    layer_names = ['v1', 'v2', 'v3', ['v4', 'v7', 'v10'],
+                   ['v5', 'v8', 'v11'], ['v6', 'v9', 'v12'], 'v13']
 
     for layer_idx, layer_nodes in enumerate(profiling_data.layers):
         for node_idx in range(len(layer_nodes)):
