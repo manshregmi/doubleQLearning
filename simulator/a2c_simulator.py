@@ -17,31 +17,46 @@ def run_a2c_simulation(
     plot_rewards=False,
     smoothing_window=50,
     trace_csv_path=None,
-    timeout_threshold_ms=150.0,
     packet_loss_prob=0.10,
     model_path="a2c_tables.pkl",
-    train_thresholds=None,  # list of thresholds to sample during training
     seed=None,
-    action_modes=(0, 1, 2),  # (0,1,2) ternary, (0,1) optimistic, (0,2) conservative
-    threshold_aware=True,    # include timeout threshold in the agent's state
-    threshold_levels=(25, 50, 75, 100, 150, 200, 300),  # one state bin per level
-    threshold_sharing=True,  # shared + per-threshold tables (threshold-aware only)
+    action_modes=(0, 1, 2),   # (0,1,2) ternary, (0,1) optimistic, (0,2) conservative
+    threshold_aware=True,     # include timeout ratio in the agent's state
+    deadline_levels=(500.0,), # all deadlines the agent is configured for
+    threshold_ratios=(0.10,), # all timeout ratios (timeout = ratio * deadline)
+    deadline_ms=None,         # fixed deadline (evaluation); None -> sample from levels
+    threshold_ratio=None,     # fixed ratio (evaluation);   None -> sample from ratios
     label="EdgeWise A2C",
-    verbose=False,           # per-layer simulator print
+    verbose=False,
 ):
+    """Run training or evaluation.
+
+    Each episode uses a deadline D and a timeout ratio rho, with
+    timeout_threshold_ms = rho * D. During training (deadline_ms /
+    threshold_ratio = None) both are sampled uniformly per episode.
+
+    Reward (paper, constrained MDP):
+        R_imm   = -eta * E                             (Eq. 10, eta = 150)
+        R_final = R_imm - phi * max(0, delta - tau)/tau  on violation
+                  (Eq. 11), applied only to levels that contributed a
+                  slack violation (neg_delta > 0).
+    No positive bonus for finishing early.
+    """
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
 
+    deadline_levels = tuple(float(d) for d in deadline_levels)
+    threshold_ratios = tuple(float(r) for r in threshold_ratios)
+
     agent = TabularActorCriticAgent(
         profiling_data, is_test=is_test,
         trace_csv_path=trace_csv_path,
-        timeout_threshold_ms=timeout_threshold_ms,
         packet_loss_prob=packet_loss_prob,
         action_modes=action_modes,
         threshold_aware=threshold_aware,
-        threshold_levels=threshold_levels,
-        threshold_sharing=threshold_sharing,
+        deadline_levels=deadline_levels,
+        threshold_ratios=threshold_ratios,
         verbose=verbose,
     )
     agent.load(model_path)
@@ -62,22 +77,28 @@ def run_a2c_simulation(
         conservative_execution_stats = defaultdict(int)
 
     start_time = time.time()
+    d_str = f"{deadline_ms:.0f}ms" if deadline_ms is not None else f"sampled {deadline_levels}"
+    r_str = f"{threshold_ratio:.2f}" if threshold_ratio is not None else f"sampled {threshold_ratios}"
     print(f"Running {label} (is_test={is_test}, modes={tuple(action_modes)}, "
-          f"threshold_in_state={threshold_aware})")
-    print(f"  Episodes: {episodes}")
-    print(f"  timeout_threshold_ms: {timeout_threshold_ms}")
+          f"ratio_in_state={threshold_aware})")
+    print(f"  Episodes: {episodes} | deadline: {d_str} | timeout ratio: {r_str}")
+
+    # Terminal penalty constant from the paper (Eq. 11)
+    PHI = 1000.0
 
     for ep in range(episodes):
-        # Sample random threshold during training to make agent threshold-aware
-        if not is_test and train_thresholds is not None:
-            th = float(random.choice(train_thresholds))
-            agent.simulator.set_timeout_threshold(th)
+        # ---- episode context: deadline and timeout = ratio * deadline ----
+        D = float(deadline_ms) if deadline_ms is not None else random.choice(deadline_levels)
+        rho = float(threshold_ratio) if threshold_ratio is not None else random.choice(threshold_ratios)
+
+        profiling_data.deadline = D          # used by reward + deadline check
+        agent.simulator.set_timeout_threshold(rho * D)
+        context = agent.context_bin(D, rho)
 
         agent.simulator.reset_episode_time()
         bw = agent.simulator.profiling.bandwidth
         rtt = agent.simulator.profiling.rtt
-        timeout_bin = agent._timeout_bin()
-        current_state = (bw, rtt, 0.0, 0, None, 0.0, 0, 0, timeout_bin)
+        current_state = (bw, rtt, 0.0, 0, None, 0.0, 0, 0, context)
 
         total_energy = 0.0
         total_time = 0.0
@@ -138,38 +159,25 @@ def run_a2c_simulation(
 
         per_episode_timeouts.append(episode_timeouts)
 
-        # ---------- Terminal deadline penalty (retroactive) ----------
-        avg_step_reward = float(np.clip(
-            np.mean([abs(s["original_reward"]) for s in trajectory]),
-            100.0, 3000.0
-        ))
-
-        deadline_violated = total_time > profiling_data.deadline
+        # ---------- Terminal deadline penalty (paper Eq. 11) ----------
+        # Only applied if the global deadline is missed, and only to levels
+        # whose execution caused a fractional-deadline slack violation.
+        deadline_violated = total_time > D
         if deadline_violated:
             deadline_missed_count += 1
-            excess = total_time - profiling_data.deadline
-            base_penalty = -0.6 * avg_step_reward
-            scale = float(np.clip(excess / profiling_data.deadline, 0.0, 1.5))
-            penalty = base_penalty * (1.0 + scale)
-
-            # Apply only to levels that caused slack violations
+            penalty = PHI * max(0.0, total_time - D) / D
             violating = [i for i, s in enumerate(trajectory) if s["neg_delta"] > 0]
             if violating:
-                per = penalty / len(violating)
                 for i in violating:
-                    trajectory[i]["reward"] += per
+                    trajectory[i]["reward"] -= penalty
             else:
-                for s in trajectory:
-                    s["reward"] += penalty / len(trajectory)
+                # No level flagged a violation — still reflect the miss in the
+                # episode return by penalizing the last step.
+                trajectory[-1]["reward"] -= penalty
         else:
             deadline_met_count += 1
-            saved = profiling_data.deadline - total_time
-            bonus = 0.25 * avg_step_reward * (1.0 + saved / profiling_data.deadline)
-            for s in trajectory:
-                s["reward"] += bonus / len(trajectory)
-
-        for s in trajectory:
-            s["reward"] = float(np.clip(s["reward"], -500.0, 50.0))
+            # No positive bonus: this is a constrained problem, not a dual
+            # energy-time objective.
 
         if not is_test:
             agent.update_trajectory(trajectory)
@@ -183,11 +191,13 @@ def run_a2c_simulation(
 
         if (ep + 1) % max(1, episodes // 10) == 0 or ep == 0:
             action_str = f"E:{episode_action_counts[0]} O:{episode_action_counts[1]} C:{episode_action_counts[2]}"
-            print(f"[{label}] Ep {ep+1}/{episodes}: E={total_energy:.2f}J, "
-                  f"T={total_time:.1f}ms, R={modified_reward:.1f}, "
+            print(f"[{label}] Ep {ep+1}/{episodes}: D={D:.0f}ms tau={rho*D:.0f}ms "
+                  f"E={total_energy:.2f}J, T={total_time:.1f}ms, R={modified_reward:.1f}, "
                   f"Timeouts={episode_timeouts}, [{action_str}]")
 
     elapsed = time.time() - start_time
+    unseen_rate = (agent.eval_unseen_states / agent.eval_decisions
+                   if agent.eval_decisions else 0.0)
     print(f"\n{'='*60}")
     print(f"{label} COMPLETE: {episodes} episodes in {elapsed:.1f}s")
     print(f"  Avg Energy: {np.mean(edge_energy):.3f} J")
@@ -196,8 +206,6 @@ def run_a2c_simulation(
           f"({100.0*deadline_met_count/episodes:.1f}%)")
     print(f"  Avg Timeouts/ep: {np.mean(per_episode_timeouts):.2f}")
     print(f"  Actions: E={action_counts[0]}, O={action_counts[1]}, C={action_counts[2]}")
-    unseen_rate = (agent.eval_unseen_states / agent.eval_decisions
-                   if agent.eval_decisions else 0.0)
     if is_test:
         print(f"  Unseen states at eval: {agent.eval_unseen_states}/{agent.eval_decisions} "
               f"({100.0 * unseen_rate:.1f}%)")

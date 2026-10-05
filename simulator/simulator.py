@@ -21,6 +21,12 @@ class CloudEdgeSimulator:
         parent 1 -> data on CLOUD  : edge child needs a (deferred) DOWNLOAD
         parent 2 -> data on BOTH   : no transfer needed for any child
         after a timeout the layer is recomputed locally -> recorded as 0 (EDGE)
+
+    Reward (paper, constrained formulation):
+        R_imm = -eta * E                              (Eq. 10)
+        R_final = R_imm - phi * max(0, delta - tau)/tau   (Eq. 11, applied
+                                                           only on violation
+                                                           in the runner)
     """
 
     def __init__(self, profiling_data: ProfilingData,
@@ -46,12 +52,12 @@ class CloudEdgeSimulator:
         self.edge_idle_power = getattr(profiling_data, 'edge_idle_power', 1.0)
         self.edge_comm_power = getattr(profiling_data, 'edge_communication_power', 2.0)
 
-        # ---- Reward configuration ----
-        # No flat per-mode penalty: the real cost of each mode comes from the
-        # simulated time/energy/failure behaviour, so the reward does not bias
-        # the agent toward one cloud mode.
-        self.optimistic_penalty = 0.0
-        self.timeout_penalty = 200.0
+        # ---- Reward configuration (paper Eq. 10) ----
+        # Only energy drives the immediate reward. Timeouts and recomputation
+        # show up through the energy they add; there is no separate per-step
+        # penalty that would bias the constrained objective.
+        self.eta = 150.0
+        self.optimistic_penalty = 0.0   # kept for API compatibility, unused
 
         # Per-layer debug print. Keep False for long training runs.
         self.verbose = False
@@ -79,12 +85,6 @@ class CloudEdgeSimulator:
         self.last_neg_count = 0
 
     def get_current_bandwidth(self, bandwidth) -> float:
-        # if self.trace_tracker:
-        #     query = self.cumulative_time_seconds + self.episode_offset
-        #     bw = self.trace_tracker.get_bandwidth_at_time(query, use_normalized=True)
-        #     return float(max(0.5, bw / 8.0))  # Mbps -> MBps
-        # return float(random.uniform(2.0, 8.0))
-
         bw_change_p = random.random()
         bw_change_n = - random.random()
         bw_change = bw_change_n + bw_change_p
@@ -428,27 +428,16 @@ class CloudEdgeSimulator:
 
     def calculate_reward(self, layer, total_energy, completion_time_s,
                          previous_surplus=0.0, negative_surplus_count=0, isA2C=False):
-        # Energy penalty
-        energy_penalty = total_energy * 30.0
+        """Immediate reward = -eta * E  (paper Eq. 10).
 
-        # Timeout penalty (flat; recompute cost is already in energy/time)
-        timeout_penalty = self.timeout_penalty if self.last_timeout_occurred else 0.0
+        The terminal penalty (Eq. 11) is applied by the runner after all
+        levels have been processed. Deadline information is returned as
+        fractional surplus so it can go into the agent's state; it does NOT
+        enter the reward.
+        """
+        reward = -self.eta * float(total_energy)
 
-        # Per-mode shaping penalty (0 by default -> no bias between cloud modes)
-        optimistic_penalty = self.optimistic_penalty if self.last_action_mode == 1 else 0.0
-
-        # Catastrophic energy penalty
-        recompute_penalty = 0.0
-        if total_energy > 1000.0:
-            recompute_penalty = 500.0 * (total_energy / 1000.0)
-
-        reward = -(energy_penalty + timeout_penalty + optimistic_penalty + recompute_penalty)
-        reward = float(np.clip(reward, -5000.0, 50.0))
-
-        if isA2C:
-            reward *= 0.15
-
-        # Fractional deadline tracking
+        # Fractional deadline tracking (state info only)
         fractional_deadline_ms = (
             self.profiling.get_edge_time_for_layer(layer)
             / max(self.profiling.get_total_edge_time(), 1e-9)
