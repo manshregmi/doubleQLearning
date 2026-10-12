@@ -68,9 +68,11 @@ class CloudEdgeSimulator:
 
         # ---- Persistent link state (RTT + bandwidth) ----
         self.rtt_baseline_ms = 4.5
-        self.rtt_step_ms = 0.25
-        self.rtt_min_ms = 1.0
-        self.rtt_max_ms = 6.0
+        self.rtt_step_ms = 1          # was 0.25
+
+        # New: scale/floor for ACK-loss timeout probability
+        self.ack_loss_gain = 2.0         # >1 makes timeout more likely
+        self.ack_loss_floor = 0.0    
         self.current_rtt_ms = self.rtt_baseline_ms
 
         self.bandwidth_step = 1.0
@@ -86,8 +88,10 @@ class CloudEdgeSimulator:
 
     # -- network-loss helpers --
     def ack_loss_prob(self, rtt_ms: float) -> float:
-        p = (float(rtt_ms) - self.rtt_baseline_ms) / max(
-            self.rtt_max_ms - self.rtt_baseline_ms, 1e-9)
+        base = (float(rtt_ms) - self.rtt_baseline_ms) / max(
+            self.rtt_max_ms - self.rtt_baseline_ms, 1e-9
+        )
+        p = self.ack_loss_floor + (1.0 - self.ack_loss_floor) * base * self.ack_loss_gain
         return float(np.clip(p, 0.0, 1.0))
 
     def _sample_ack(self) -> bool:
