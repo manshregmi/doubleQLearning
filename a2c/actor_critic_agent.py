@@ -7,10 +7,6 @@ from profiling.profile import ProfilingData
 from simulator.simulator import CloudEdgeSimulator
 
 
-# Predefined action spaces (per-node modes)
-#   0 = local (user/edge device)
-#   1 = optimistic cloudlet  (result download deferred)
-#   2 = conservative cloudlet (result download immediate)
 ACTION_SPACES = {
     "ternary":      (0, 1, 2),
     "optimistic":   (0, 1),
@@ -21,30 +17,20 @@ ACTION_SPACES = {
 class TabularActorCriticAgent:
     """Tabular A2C over a per-node mode action space.
 
-    Reward follows the paper's constrained formulation:
-        R_imm  = -eta * E                      (Eq. 10, eta = 150)
-        R_final = R_imm - phi * max(0, delta - tau) / tau  on violation (Eq. 11)
-    The terminal penalty is applied only in the runner, so this agent just
-    consumes rewards exactly as they arrive in the trajectory.
+    Reward (paper):
+        R_imm   = -eta * E                              (Eq. 10, eta = 150)
+        R_final = R_imm - phi * max(0, delta - tau)/tau   (Eq. 11, runner)
 
-    The last slot of the environment state is a context tuple
-    (deadline_idx, ratio_idx): the index of the episode's deadline in
-    `deadline_levels` and of its timeout ratio (timeout = ratio * deadline)
-    in `threshold_ratios`.
-
-    Every agent observes the deadline. Only a threshold-aware agent also
-    observes the timeout ratio.
+    State (10-tuple):
+        (bw, rtt, ctime, layer, prev_action, surplus,
+         neg_count, chain_len, d_idx, recent_ack_loss)
     """
 
     def __init__(self, profiling_data, is_test=False,
                  alpha_actor=0.01, alpha_critic=0.01, gamma=0.95,
                  trace_csv_path=None,
-                 timeout_threshold_ms=150.0,
-                 packet_loss_prob=0.10,
                  action_modes=(0, 1, 2),
-                 threshold_aware=True,
                  deadline_levels=(500.0,),
-                 threshold_ratios=(0.10,),
                  verbose=False):
         self.profiling = profiling_data
         self.is_test = is_test
@@ -52,11 +38,8 @@ class TabularActorCriticAgent:
         self.alpha_actor = alpha_actor
         self.alpha_critic = alpha_critic
 
-        self.threshold_aware = bool(threshold_aware)
         self.deadline_levels = np.asarray(sorted(deadline_levels), dtype=float)
-        self.threshold_ratios = np.asarray(sorted(threshold_ratios), dtype=float)
 
-        # Allowed per-node modes for this agent
         self.action_modes = tuple(int(m) for m in action_modes)
         if 0 not in self.action_modes:
             raise ValueError("action_modes must include 0 (local execution).")
@@ -65,33 +48,26 @@ class TabularActorCriticAgent:
         self.policy_table = {}
         self.value_table = {}
 
-        # Evaluation diagnostics
         self.eval_decisions = 0
         self.eval_unseen_states = 0
 
         self.simulator = CloudEdgeSimulator(
             profiling_data,
             trace_csv_path=trace_csv_path,
-            timeout_threshold_ms=timeout_threshold_ms,
-            packet_loss_prob=packet_loss_prob,
         )
         self.simulator.verbose = verbose
 
-        # Discretization bins
         self.bandwidth_bins = np.linspace(0.5, 30, 40)
-        self.rtt_bins = np.linspace(0, 100, 20)
+        self.rtt_bins = np.linspace(1.0, 6.0, 20)
         self.cloudtime_bins = np.linspace(0, 100, 20)
-        # Surplus as a FRACTION of the deadline (comparable across deadlines)
         self.surplus_frac_bins = np.linspace(-0.3, 0.3, 24)
 
-        # Exploration (temperature-based softmax)
         self.temperature = 1.0
         self.temperature_min = 0.25
         self.temperature_max = 2.0
         self.temperature_decay = 0.9995
         self.temperature_boost = 1.5
 
-        # epsilon floor
         self.epsilon_min = 0.05
 
         self.best_episode_reward = -1e9
@@ -103,28 +79,21 @@ class TabularActorCriticAgent:
         self.optimistic_execution_counts = {}
         self.conservative_execution_counts = {}
 
-    # ------------------------------------------------------------------
-    # Context / state keys
-    # ------------------------------------------------------------------
-    def context_bin(self, deadline_ms, ratio):
-        """(deadline_idx, ratio_idx) using the nearest configured level."""
-        d_idx = int(np.argmin(np.abs(self.deadline_levels - float(deadline_ms))))
-        r_idx = int(np.argmin(np.abs(self.threshold_ratios - float(ratio))))
-        return (d_idx, r_idx)
+    def context_bin(self, deadline_ms):
+        return int(np.argmin(np.abs(self.deadline_levels - float(deadline_ms))))
 
     def _discretize(self, value, bins):
         idx = np.digitize([value], bins, right=True)[0] - 1
         return float(bins[max(0, min(idx, len(bins) - 1))])
 
     def _state_to_key(self, state):
-        # state = (bw, rtt, ctime, layer, prev_action, surplus, neg_count, chain_len, context)
-        bw, rtt, ctime, layer, prev_action, surplus, neg_count, chain_len, context = state
-        d_idx, r_idx = context
+        (bw, rtt, ctime, layer, prev_action, surplus,
+         neg_count, chain_len, d_idx, recent_ack_loss) = state
 
         prev_key = tuple(int(x) for x in prev_action) if prev_action is not None else (-1,)
         prev_hash = hash(prev_key) % 1000
 
-        deadline = float(self.deadline_levels[d_idx])
+        deadline = float(self.deadline_levels[int(d_idx)])
         surplus_frac = float(surplus) / max(deadline, 1e-9)
 
         key = (
@@ -136,20 +105,17 @@ class TabularActorCriticAgent:
             self._discretize(surplus_frac, self.surplus_frac_bins),
             int(neg_count),
             int(chain_len),
-            int(d_idx),                      # every agent knows the deadline
+            int(d_idx),
+            int(recent_ack_loss),
         )
-        if self.threshold_aware:
-            key = key + (int(r_idx),)        # only threshold-aware agents see the ratio
         return key
 
     def _action_to_key(self, action):
         return tuple(int(x) for x in action[:, 1])
 
     def _get_possible_actions(self, layer_idx):
-        """All per-node assignments using only this agent's allowed modes."""
         if layer_idx in self._action_cache:
             return self._action_cache[layer_idx]
-
         nodes = self.profiling.get_num_nodes(layer_idx)
         actions = []
         for pattern in itertools.product(self.action_modes, repeat=nodes):
@@ -157,13 +123,9 @@ class TabularActorCriticAgent:
             a[:, 0] = layer_idx
             a[:, 1] = pattern
             actions.append(a)
-
         self._action_cache[layer_idx] = actions
         return actions
 
-    # ------------------------------------------------------------------
-    # Acting / learning
-    # ------------------------------------------------------------------
     def choose_action(self, state):
         layer = int(state[3])
         actions = self._get_possible_actions(layer)
@@ -177,7 +139,6 @@ class TabularActorCriticAgent:
         if self.is_test:
             self.eval_decisions += 1
             if not any((s_key, ak) in self.policy_table for ak in action_keys):
-                # Never trained on this state -> argmax of all-zero prefs = all-local
                 self.eval_unseen_states += 1
 
         prefs = np.array([self.policy_table.get((s_key, ak), 0.0) for ak in action_keys])
@@ -200,7 +161,6 @@ class TabularActorCriticAgent:
             isAllCloud=False,
         )
 
-        # Must run BEFORE get_next_state (it sets last_timeout_occurred).
         energy, completion_time_s = self.simulator.compute_energy_and_time(
             current_state=current_state,
             current_action=action,
@@ -234,15 +194,11 @@ class TabularActorCriticAgent:
         G = 0.0
         for step in reversed(trajectory):
             G = step["reward"] + self.gamma * G
-            # Room for a few hundred J at eta=150 plus a phi=1000 terminal penalty
             G = float(np.clip(G, -3000.0, 500.0))
-
             s = step["state_key"]
             a = step["action_key"]
-
             V = self.value_table.get(s, 0.0)
             advantage = G - V
-
             self.value_table[s] = V + self.alpha_critic * advantage
             self.policy_table[(s, a)] = float(np.clip(
                 self.policy_table.get((s, a), 0.0) + self.alpha_actor * advantage,
@@ -294,5 +250,5 @@ class TabularActorCriticAgent:
             if isinstance(data, dict):
                 self.policy_table = data.get("policy", {})
                 self.value_table = data.get("value", {})
-            else:  # legacy (policy, value) tuple
+            else:
                 self.policy_table, self.value_table = data

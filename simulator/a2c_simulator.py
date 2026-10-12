@@ -17,46 +17,32 @@ def run_a2c_simulation(
     plot_rewards=False,
     smoothing_window=50,
     trace_csv_path=None,
-    packet_loss_prob=0.10,
     model_path="a2c_tables.pkl",
     seed=None,
-    action_modes=(0, 1, 2),   # (0,1,2) ternary, (0,1) optimistic, (0,2) conservative
-    threshold_aware=True,     # include timeout ratio in the agent's state
-    deadline_levels=(500.0,), # all deadlines the agent is configured for
-    threshold_ratios=(0.10,), # all timeout ratios (timeout = ratio * deadline)
-    deadline_ms=None,         # fixed deadline (evaluation); None -> sample from levels
-    threshold_ratio=None,     # fixed ratio (evaluation);   None -> sample from ratios
+    action_modes=(0, 1, 2),
+    deadline_levels=(500.0,),
+    deadline_ms=None,
     label="EdgeWise A2C",
     verbose=False,
 ):
-    """Run training or evaluation.
+    """Train or evaluate across deadlines.
 
-    Each episode uses a deadline D and a timeout ratio rho, with
-    timeout_threshold_ms = rho * D. During training (deadline_ms /
-    threshold_ratio = None) both are sampled uniformly per episode.
-
-    Reward (paper, constrained MDP):
-        R_imm   = -eta * E                             (Eq. 10, eta = 150)
-        R_final = R_imm - phi * max(0, delta - tau)/tau  on violation
-                  (Eq. 11), applied only to levels that contributed a
-                  slack violation (neg_delta > 0).
-    No positive bonus for finishing early.
+    Reward: paper Eq. 10 + Eq. 11 (constrained MDP).
+    Network loss: RTT-driven ACK loss.
+    State: (bw, rtt, ctime, layer, prev_action, surplus,
+            neg_count, chain_len, d_idx, recent_ack_loss).
     """
     if seed is not None:
         random.seed(seed)
         np.random.seed(seed)
 
     deadline_levels = tuple(float(d) for d in deadline_levels)
-    threshold_ratios = tuple(float(r) for r in threshold_ratios)
 
     agent = TabularActorCriticAgent(
         profiling_data, is_test=is_test,
         trace_csv_path=trace_csv_path,
-        packet_loss_prob=packet_loss_prob,
         action_modes=action_modes,
-        threshold_aware=threshold_aware,
         deadline_levels=deadline_levels,
-        threshold_ratios=threshold_ratios,
         verbose=verbose,
     )
     agent.load(model_path)
@@ -65,7 +51,7 @@ def run_a2c_simulation(
     completion_time = []
     rewards = []
     episode_modified_rewards = []
-    per_episode_timeouts = []
+    per_episode_ack_losses = []
     action_counts = {0: 0, 1: 0, 2: 0}
 
     deadline_missed_count = 0
@@ -78,33 +64,28 @@ def run_a2c_simulation(
 
     start_time = time.time()
     d_str = f"{deadline_ms:.0f}ms" if deadline_ms is not None else f"sampled {deadline_levels}"
-    r_str = f"{threshold_ratio:.2f}" if threshold_ratio is not None else f"sampled {threshold_ratios}"
-    print(f"Running {label} (is_test={is_test}, modes={tuple(action_modes)}, "
-          f"ratio_in_state={threshold_aware})")
-    print(f"  Episodes: {episodes} | deadline: {d_str} | timeout ratio: {r_str}")
+    print(f"Running {label} (is_test={is_test}, modes={tuple(action_modes)})")
+    print(f"  Episodes: {episodes} | deadline: {d_str}")
 
-    # Terminal penalty constant from the paper (Eq. 11)
     PHI = 1000.0
 
     for ep in range(episodes):
-        # ---- episode context: deadline and timeout = ratio * deadline ----
         D = float(deadline_ms) if deadline_ms is not None else random.choice(deadline_levels)
-        rho = float(threshold_ratio) if threshold_ratio is not None else random.choice(threshold_ratios)
-
-        profiling_data.deadline = D          # used by reward + deadline check
-        agent.simulator.set_timeout_threshold(rho * D)
-        context = agent.context_bin(D, rho)
+        profiling_data.deadline = D
+        d_idx = agent.context_bin(D)
 
         agent.simulator.reset_episode_time()
-        bw = agent.simulator.profiling.bandwidth
-        rtt = agent.simulator.profiling.rtt
-        current_state = (bw, rtt, 0.0, 0, None, 0.0, 0, 0, context)
+
+        bw = agent.simulator.current_bandwidth
+        rtt = agent.simulator.current_rtt_ms
+        # ---- 10-tuple initial state (last element = recent_ack_loss) ----
+        current_state = (bw, rtt, 0.0, 0, None, 0.0, 0, 0, d_idx, 0)
 
         total_energy = 0.0
         total_time = 0.0
         total_reward = 0.0
         trajectory = []
-        episode_timeouts = 0
+        episode_ack_losses = 0
         episode_action_counts = {0: 0, 1: 0, 2: 0}
         prev_neg = 0
 
@@ -114,12 +95,14 @@ def run_a2c_simulation(
             action, reward, next_state, terminal, energy, completion_time_s, \
                 new_bandwidth, surplus, fractional_deadline, neg_count = agent.train(current_state)
 
-            action_mode = int(np.max(action[:, 1]))
-            episode_action_counts[action_mode] += 1
-            action_counts[action_mode] += 1
+            # Per-node action counting
+            for node_mode in action[:, 1]:
+                m = int(node_mode)
+                episode_action_counts[m] += 1
+                action_counts[m] += 1
 
-            if agent.simulator.last_timeout_occurred:
-                episode_timeouts += 1
+            if agent.simulator.last_ack_loss_occurred:
+                episode_ack_losses += 1
 
             if visualize_stats:
                 current_layer = int(current_state[3])
@@ -143,9 +126,9 @@ def run_a2c_simulation(
                 "surplus": surplus,
                 "energy": energy,
                 "time": completion_time_s,
-                "timeout": agent.simulator.last_timeout_occurred,
+                "ack_loss": agent.simulator.last_ack_loss_occurred,
                 "chain_length": current_state[7],
-                "action_mode": action_mode,
+                "action_mode": int(np.max(action[:, 1])),
                 "neg_delta": neg_delta,
             })
 
@@ -157,11 +140,9 @@ def run_a2c_simulation(
             if terminal:
                 break
 
-        per_episode_timeouts.append(episode_timeouts)
+        per_episode_ack_losses.append(episode_ack_losses)
 
-        # ---------- Terminal deadline penalty (paper Eq. 11) ----------
-        # Only applied if the global deadline is missed, and only to levels
-        # whose execution caused a fractional-deadline slack violation.
+        # ---- Terminal penalty (paper Eq. 11) ----
         deadline_violated = total_time > D
         if deadline_violated:
             deadline_missed_count += 1
@@ -171,13 +152,9 @@ def run_a2c_simulation(
                 for i in violating:
                     trajectory[i]["reward"] -= penalty
             else:
-                # No level flagged a violation — still reflect the miss in the
-                # episode return by penalizing the last step.
                 trajectory[-1]["reward"] -= penalty
         else:
             deadline_met_count += 1
-            # No positive bonus: this is a constrained problem, not a dual
-            # energy-time objective.
 
         if not is_test:
             agent.update_trajectory(trajectory)
@@ -190,10 +167,14 @@ def run_a2c_simulation(
         episode_modified_rewards.append(modified_reward)
 
         if (ep + 1) % max(1, episodes // 10) == 0 or ep == 0:
-            action_str = f"E:{episode_action_counts[0]} O:{episode_action_counts[1]} C:{episode_action_counts[2]}"
-            print(f"[{label}] Ep {ep+1}/{episodes}: D={D:.0f}ms tau={rho*D:.0f}ms "
+            ec, oc, cc = (episode_action_counts[0],
+                          episode_action_counts[1],
+                          episode_action_counts[2])
+            total_nodes = ec + oc + cc
+            print(f"[{label}] Ep {ep+1}/{episodes}: D={D:.0f}ms "
                   f"E={total_energy:.2f}J, T={total_time:.1f}ms, R={modified_reward:.1f}, "
-                  f"Timeouts={episode_timeouts}, [{action_str}]")
+                  f"ACK_loss={episode_ack_losses}, "
+                  f"[E:{ec} O:{oc} C:{cc} (n={total_nodes})]")
 
     elapsed = time.time() - start_time
     unseen_rate = (agent.eval_unseen_states / agent.eval_decisions
@@ -204,8 +185,8 @@ def run_a2c_simulation(
     print(f"  Avg Time:   {np.mean(completion_time):.1f} ms")
     print(f"  DL-Met:     {deadline_met_count}/{episodes} "
           f"({100.0*deadline_met_count/episodes:.1f}%)")
-    print(f"  Avg Timeouts/ep: {np.mean(per_episode_timeouts):.2f}")
-    print(f"  Actions: E={action_counts[0]}, O={action_counts[1]}, C={action_counts[2]}")
+    print(f"  Avg ACK losses/ep: {np.mean(per_episode_ack_losses):.2f}")
+    print(f"  Per-node actions: E={action_counts[0]}, O={action_counts[1]}, C={action_counts[2]}")
     if is_test:
         print(f"  Unseen states at eval: {agent.eval_unseen_states}/{agent.eval_decisions} "
               f"({100.0 * unseen_rate:.1f}%)")
@@ -218,7 +199,6 @@ def run_a2c_simulation(
         print_execution_stats(edge_execution_stats, optimistic_execution_stats,
                               conservative_execution_stats, profiling_data, episodes, label)
 
-    # Only persist tables after training; evaluation must not overwrite them.
     if not is_test:
         agent.save(model_path)
 
@@ -226,7 +206,7 @@ def run_a2c_simulation(
         "avg_energy": float(np.mean(edge_energy)),
         "avg_time_ms": float(np.mean(completion_time)),
         "deadline_miss_rate": deadline_missed_count / episodes,
-        "avg_timeouts_per_ep": float(np.mean(per_episode_timeouts)),
+        "avg_ack_losses_per_ep": float(np.mean(per_episode_ack_losses)),
         "action_counts": dict(action_counts),
         "unseen_state_rate": unseen_rate,
         "n_episodes": episodes,
