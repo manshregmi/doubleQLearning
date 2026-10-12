@@ -25,12 +25,12 @@ SEED = 42
 DO_TRAIN = True
 
 VARIANTS = {
-    "Ternary A2C": {
-        "agent_type": "a2c",
-        "modes": (0, 1, 2),
-        "model_path": "a2c_ternary_dl.pkl",
-        "color": "#1f77b4", "marker": "o",
-    },
+    # "Ternary A2C": {
+    #     "agent_type": "a2c",
+    #     "modes": (0, 1, 2),
+    #     "model_path": "a2c_ternary_dl.pkl",
+    #     "color": "#1f77b4", "marker": "o",
+    # },
     "PPO (Ternary)": {
         "agent_type": "ppo",
         "modes": (0, 1, 2),
