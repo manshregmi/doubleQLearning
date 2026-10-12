@@ -20,7 +20,7 @@ EVAL_EPISODES = 10000
 MAX_STEPS = 10
 SEED = 42
 
-DO_TRAIN = False
+DO_TRAIN = True
 
 VARIANTS = {
     "Ternary A2C": {

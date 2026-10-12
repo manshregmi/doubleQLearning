@@ -67,14 +67,16 @@ class CloudEdgeSimulator:
         self.max_competing_devices = int(max_competing_devices)
 
         # ---- Persistent link state (RTT + bandwidth) ----
+       # ---- Persistent link state (RTT + bandwidth) ----
         self.rtt_baseline_ms = 4.5
-        self.rtt_step_ms = 1          # was 0.25
-
-        # New: scale/floor for ACK-loss timeout probability
-        self.ack_loss_gain = 2.0         # >1 makes timeout more likely
-        self.ack_loss_floor = 0.0    
+        self.rtt_step_ms = 0.75          # increased: faster RTT up/down
+        self.rtt_min_ms = 1.0            # REQUIRED by get_current_rtt()
+        self.rtt_max_ms = 6.0            # REQUIRED by get_current_rtt() and ack_loss_prob()
         self.current_rtt_ms = self.rtt_baseline_ms
 
+        # ---- Timeout / ACK-loss probability tuning ----
+        self.ack_loss_gain = 2.0         # >1 makes timeout more likely
+        self.ack_loss_floor = 0.0        # e.g. 0.05 for a minimum timeout prob
         self.bandwidth_step = 1.0
         self.bandwidth_min = 1.0
         self.bandwidth_max = 15.0
